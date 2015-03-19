@@ -1,9 +1,9 @@
 /**
  * Created by Administrator on 2015/3/14.
  */
-bracket.define('bracket.mvc',['mvc.compile','mvc.dom'],function(require){
-  var domQuery=require('mvc.dom'),util=require('mvc.util'),arrAdd=util.arrAdd,trim=require('mvc.parser').trim,
-    getAttr=domQuery.getAttr,compile=require('mvc.compile').compile,define=bracket.define,Controller=require('mvc.controller');
+bracket.define('mvc',['mvc.compile','mvc.dom'],function(require){
+  var domQuery=require('mvc.dom'),util=require('mvc.util'),arrAdd=util.arrAdd,getAttr=domQuery.getAttr,
+    compile=require('mvc.compile').compile,define=bracket.define,Controller=require('mvc.controller');
   var appConfigMap={},waiting={};
   function initApp(appName,callback){
     if(!util.isFunc(callback))callback=noop;
@@ -37,7 +37,7 @@ bracket.define('bracket.mvc',['mvc.compile','mvc.dom'],function(require){
   }
   function addRequire(arr,input){
     if(arr){
-      if(typeof input=="string")input=input.split(/\b\s+\b/).map(trim);
+      if(typeof input=="string")input=input.split(/\b\s+\b/).map(function(s){return s.trim()});
       if( input instanceof Array) input.forEach(function(item){arrAdd(arr,item)})
     }
     return arr;

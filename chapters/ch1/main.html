@@ -37,8 +37,8 @@
             controller.features='小,保留最主要的功能,尽量的减小文件;实现绑定,模拟Angular的MVVM模式;js模块化,使得代码易维护;基于HTML5的API,对于DOM操作使用原生代码,不引入JQuery或者JQLite'.split(';');
         }
     });
-    bracket.define('start',['bracket.mvc'],function(require){
-        require('bracket.mvc').init('ch1');
+    bracket.define('start',['mvc'],function(require){
+        require('mvc').init('ch1');
     })
 </script>
 </body>

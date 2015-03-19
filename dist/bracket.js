@@ -24,7 +24,9 @@
         }
         else if(arguments.length<3)throw Error('invalid arguments');
         tryResolve(func,name,requires);
+        return define;
       }
+      define.define=define;
       define.require=function(name){
         return (!resolved.hasOwnProperty(name)&&!unresolved.hasOwnProperty(name))?undefined:require(name)
       };
@@ -504,6 +506,39 @@ bracket.define(['mvc.register'],function(require){
   }
 });
 /**
+ * Created by Administrator on 2015/3/19.
+ */
+bracket.define(['mvc.register'],function(require){
+  var bind=require('mvc.binding');
+  //it cause trouble when expression is a.b.c
+  //no validation before change ctrl
+  function convert(val,type){
+    switch (type){
+      case 'number':return (+val)||'';
+      case 'boolean':return !!val;
+      default :return val+'';
+    }
+  }
+  require('mvc.register').addCompiler({
+    name:'br-model',
+    link:function(ctrl,element,attr){
+      var exp=attr['brModel'].value,binding=bind(exp),initValue,type;
+      if((initValue=binding.get(ctrl))!==undefined)
+        type=typeof (element.value=initValue);
+      ctrl.$bind(binding,function(val){
+        if(val!==undefined)
+          ctrl[exp]=element.value=val;
+      });
+      element.addEventListener('blur',function(){
+        if(ctrl[exp]!==element.value){
+          ctrl[exp]=convert(element.value,type);
+          ctrl.$update();
+        }
+      })
+    }
+  })
+});
+/**
  * Created by Administrator on 2015/3/15.
  */
 bracket.define(['mvc.compile'],function(require){
@@ -656,9 +691,9 @@ bracket.define('mvc.interpolate',['mvc.controller','mvc.dom'],function(require,e
 /**
  * Created by Administrator on 2015/3/14.
  */
-bracket.define('bracket.mvc',['mvc.compile','mvc.dom'],function(require){
-  var domQuery=require('mvc.dom'),util=require('mvc.util'),arrAdd=util.arrAdd,trim=require('mvc.parser').trim,
-    getAttr=domQuery.getAttr,compile=require('mvc.compile').compile,define=bracket.define,Controller=require('mvc.controller');
+bracket.define('mvc',['mvc.compile','mvc.dom'],function(require){
+  var domQuery=require('mvc.dom'),util=require('mvc.util'),arrAdd=util.arrAdd,getAttr=domQuery.getAttr,
+    compile=require('mvc.compile').compile,define=bracket.define,Controller=require('mvc.controller');
   var appConfigMap={},waiting={};
   function initApp(appName,callback){
     if(!util.isFunc(callback))callback=noop;
@@ -692,7 +727,7 @@ bracket.define('bracket.mvc',['mvc.compile','mvc.dom'],function(require){
   }
   function addRequire(arr,input){
     if(arr){
-      if(typeof input=="string")input=input.split(/\b\s+\b/).map(trim);
+      if(typeof input=="string")input=input.split(/\b\s+\b/).map(function(s){return s.trim()});
       if( input instanceof Array) input.forEach(function(item){arrAdd(arr,item)})
     }
     return arr;

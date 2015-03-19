@@ -24,7 +24,9 @@
         }
         else if(arguments.length<3)throw Error('invalid arguments');
         tryResolve(func,name,requires);
+        return define;
       }
+      define.define=define;
       define.require=function(name){
         return (!resolved.hasOwnProperty(name)&&!unresolved.hasOwnProperty(name))?undefined:require(name)
       };

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>控制器</title>
+    <base target="_blank">
+    <link rel="stylesheet" href="../common/layout.css">
+    <script src="../../dist/bracket.js"></script>
+</head>
+<body>
+<main br-app="ch2">
+<div br-controller="ch2-list-ctrl">
+    <h2>Number List</h2>
+    <ul>
+        <li br-repeat="num in getNumbers()">{{num}}</li>
+    </ul>
+    <p>
+        random a number, the range is:
+    </p>
+    <p>max: <input br-model="max"></p>
+    <p>min: <input br-model="min"></p>
+    <button br-click="add()">Random</button>
+    <button br-click="remove()">Remove</button>
+</div>
+</main>
+<script>
+bracket.define('ch2-list-ctrl',function(){
+    var items=[];
+    function random(min,max){
+        return Math.random()*(max-min)+min;
+    }
+    return function(controller){
+        controller.min=0;
+        controller.max=10;
+        controller.add=function(){
+            items.push(random(controller.min,controller.max));
+        };
+        controller.remove=function(){
+            items.pop();
+        };
+        controller.getNumbers=function(){return items}
+    }
+});
+bracket.mvc.init('ch2');
+</script>
+</body>
+</html>
