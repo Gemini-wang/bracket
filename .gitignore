@@ -12,6 +12,7 @@ $RECYCLE.BIN/
 .idea
 gruntfile.js
 temp
+node_modules
 # Windows Installer files
 *.cab
 *.msi

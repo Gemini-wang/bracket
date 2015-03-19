@@ -11,10 +11,10 @@ bracket.define(['mvc.register'],function(require){
   }
   function defineEvent(name,autoUpdate){
     addCompiler({
-      name:'bracket-'+name,
+      name:'br-'+name,
       link:function(ctrl,element,attr){
         try{
-          var exp=getExp(attr['bracket'+capital(name)].value);
+          var exp=getExp(attr['br'+capital(name)].value);
           function invoke(e){
             ctrl.$event=e;
             exp.get(ctrl);

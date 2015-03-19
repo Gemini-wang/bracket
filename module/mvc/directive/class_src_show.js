@@ -3,9 +3,9 @@
  */
 bracket.define(['mvc.register'],function(require){
   require('mvc.register').addCompiler({
-    name:'bracket-class',
+    name:'br-class',
     link:function(ctrl,element,attr){
-      ctrl.$bind(attr['bracketClass'].value,function(newClass,oldClass){
+      ctrl.$bind(attr['brClass'].value,function(newClass,oldClass){
         if(oldClass)
           element.classList.remove(oldClass);
         if(newClass)
@@ -14,18 +14,18 @@ bracket.define(['mvc.register'],function(require){
     }
   });
   require('mvc.register').addCompiler({
-    name:'bracket-src',
+    name:'br-src',
     link:function(ctrl,element,attr){
-      ctrl.$bind(attr['bracketSrc'].value,function(newClass){
+      ctrl.$bind(attr['brSrc'].value,function(newClass){
         if(newClass) element.setAttribute('src',newClass)
       })
     }
   });
   var showExp=/display\:none/g;
   require('mvc.register').addCompiler({
-    name:'bracket-show',
+    name:'br-show',
     link:function(ctrl,element,attr){
-      ctrl.$bind(attr['bracketShow'].value,function(show){
+      ctrl.$bind(attr['brShow'].value,function(show){
         var style=element.getAttribute('style')||'';
         if(show)
           style=style.replace(showExp,'');

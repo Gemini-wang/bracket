@@ -6,7 +6,7 @@ bracket.define('mvc.compile',['mvc.register'],function(require,exports){
   var handlers=require('mvc.register').compilers;
   function compileElement(element,controller){
     var attr=domQuery.attrMap(element),eleCtrl;
-    if(eleCtrl=initController(attr['bracketController'],controller)||controller){
+    if(eleCtrl=initController(attr['brController'],controller)||controller){
       handlers.forEach(link);
       interpolate(eleCtrl,element,attr);
     }

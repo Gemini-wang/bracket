@@ -387,7 +387,7 @@ bracket.define('mvc.compile',['mvc.register'],function(require,exports){
   var handlers=require('mvc.register').compilers;
   function compileElement(element,controller){
     var attr=domQuery.attrMap(element),eleCtrl;
-    if(eleCtrl=initController(attr['bracketController'],controller)||controller){
+    if(eleCtrl=initController(attr['brController'],controller)||controller){
       handlers.forEach(link);
       interpolate(eleCtrl,element,attr);
     }
@@ -436,9 +436,9 @@ bracket.define('mvc.debug',function(r,e,module){
  */
 bracket.define(['mvc.register'],function(require){
   require('mvc.register').addCompiler({
-    name:'bracket-class',
+    name:'br-class',
     link:function(ctrl,element,attr){
-      ctrl.$bind(attr['bracketClass'].value,function(newClass,oldClass){
+      ctrl.$bind(attr['brClass'].value,function(newClass,oldClass){
         if(oldClass)
           element.classList.remove(oldClass);
         if(newClass)
@@ -447,18 +447,18 @@ bracket.define(['mvc.register'],function(require){
     }
   });
   require('mvc.register').addCompiler({
-    name:'bracket-src',
+    name:'br-src',
     link:function(ctrl,element,attr){
-      ctrl.$bind(attr['bracketSrc'].value,function(newClass){
+      ctrl.$bind(attr['brSrc'].value,function(newClass){
         if(newClass) element.setAttribute('src',newClass)
       })
     }
   });
   var showExp=/display\:none/g;
   require('mvc.register').addCompiler({
-    name:'bracket-show',
+    name:'br-show',
     link:function(ctrl,element,attr){
-      ctrl.$bind(attr['bracketShow'].value,function(show){
+      ctrl.$bind(attr['brShow'].value,function(show){
         var style=element.getAttribute('style')||'';
         if(show)
           style=style.replace(showExp,'');
@@ -483,10 +483,10 @@ bracket.define(['mvc.register'],function(require){
   }
   function defineEvent(name,autoUpdate){
     addCompiler({
-      name:'bracket-'+name,
+      name:'br-'+name,
       link:function(ctrl,element,attr){
         try{
-          var exp=getExp(attr['bracket'+capital(name)].value);
+          var exp=getExp(attr['br'+capital(name)].value);
           function invoke(e){
             ctrl.$event=e;
             exp.get(ctrl);
@@ -525,13 +525,13 @@ bracket.define(['mvc.compile'],function(require){
     return end;
   }
   require('mvc.register').addCompiler({
-    name:'bracket-repeat',
+    name:'br-repeat',
     priority:1000,
     link:function(parentCtrl,ele,attr){
-      var exp=attr['bracketRepeat'].value,match= exp.match(/^\s*([\s\S]+?)\s+in\s+([\s\S]+?)(?:\s+track\s+by\s+([\s\S]+?))?\s*$/);
+      var exp=attr['brRepeat'].value,match= exp.match(/^\s*([\s\S]+?)\s+in\s+([\s\S]+?)(?:\s+track\s+by\s+([\s\S]+?))?\s*$/);
       if(!match) throw Error('repeat exp should like: item in items (track by item.id)');
       var endNode=createComment(ele,exp),template=ele.cloneNode(true);
-      dom.removeAttribute(template,'bracket-repeat');
+      dom.removeAttribute(template,'br-repeat');
       ele.parentElement.removeChild(ele);
       var watchExp=match[2],itemExp=match[1],trackExp=match[3],lastBlock={},lastEles=[];
       parentCtrl.$bind(watchExp,function(newCollection,old){
@@ -659,23 +659,30 @@ bracket.define('mvc.interpolate',['mvc.controller','mvc.dom'],function(require,e
 bracket.define('bracket.mvc',['mvc.compile','mvc.dom'],function(require){
   var domQuery=require('mvc.dom'),util=require('mvc.util'),arrAdd=util.arrAdd,trim=require('mvc.parser').trim,
     getAttr=domQuery.getAttr,compile=require('mvc.compile').compile,define=bracket.define,Controller=require('mvc.controller');
-  var appConfigMap={ };
+  var appConfigMap={},waiting={};
   function initApp(appName,callback){
-    var appElement=domQuery.$('*[bracket-app="!"]'.replace('!',appName))[0],requires;
-    if(appElement){
-      configApp(appName,{require:getAttr(appElement,'bracket-require',1)});
-      requires=appConfigMap[appName].require;
-      domQuery.$('*[bracket-controller]',appElement).forEach(function(child){
-        addRequire(requires,getAttr(child,'bracket-controller'))
-      });
-      define(requires.slice(),function(){
-        var ret=compile(appElement,new Controller());
-        if(util.isFunc(callback))callback(ret);
-      })
+    if(!util.isFunc(callback))callback=noop;
+    if(waiting){
+      var cbs=waiting[appName]||(waiting[appName]=[]);
+      arrAdd(cbs,callback)
+    }else{
+      var appElement=domQuery.$('*[br-app="!"]'.replace('!',appName))[0],requires;
+      if(appElement){
+        configApp(appName,{require:getAttr(appElement,'bracket-require',1)});
+        requires=appConfigMap[appName].require;
+        domQuery.$('*[br-controller]',appElement).forEach(function(child){
+          addRequire(requires,getAttr(child,'br-controller'))
+        });
+        define(requires.slice(),function(){
+          var ret=compile(appElement,new Controller());
+          if(util.isFunc(callback))callback(ret);
+        })
+      }
+      else
+        console.warn('element with br-app='+appName+' not found');
     }
-    else
-      console.warn('element with bracket-app='+appName+' not found');
   }
+
   function configApp(appName,config){
     var appConfig=getAppConfig(appName);
     if(appConfig&&config){
@@ -702,6 +709,16 @@ bracket.define('bracket.mvc',['mvc.compile','mvc.dom'],function(require){
     }
 
   }
+  function noop(){}
+  document.addEventListener('DOMContentLoaded',function(){
+    var pending=waiting;
+    waiting=null;
+    util.forEach(pending,function(cbs,name){
+      initApp(name,function(result){
+        cbs.forEach(function(call){call(result)})
+      })
+    })
+  });
   return bracket.mvc={
     init:initApp,
     configApp:configApp

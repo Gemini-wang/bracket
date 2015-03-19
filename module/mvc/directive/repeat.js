@@ -20,13 +20,13 @@ bracket.define(['mvc.compile'],function(require){
     return end;
   }
   require('mvc.register').addCompiler({
-    name:'bracket-repeat',
+    name:'br-repeat',
     priority:1000,
     link:function(parentCtrl,ele,attr){
-      var exp=attr['bracketRepeat'].value,match= exp.match(/^\s*([\s\S]+?)\s+in\s+([\s\S]+?)(?:\s+track\s+by\s+([\s\S]+?))?\s*$/);
+      var exp=attr['brRepeat'].value,match= exp.match(/^\s*([\s\S]+?)\s+in\s+([\s\S]+?)(?:\s+track\s+by\s+([\s\S]+?))?\s*$/);
       if(!match) throw Error('repeat exp should like: item in items (track by item.id)');
       var endNode=createComment(ele,exp),template=ele.cloneNode(true);
-      dom.removeAttribute(template,'bracket-repeat');
+      dom.removeAttribute(template,'br-repeat');
       ele.parentElement.removeChild(ele);
       var watchExp=match[2],itemExp=match[1],trackExp=match[3],lastBlock={},lastEles=[];
       parentCtrl.$bind(watchExp,function(newCollection,old){

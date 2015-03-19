@@ -4,23 +4,30 @@
 bracket.define('bracket.mvc',['mvc.compile','mvc.dom'],function(require){
   var domQuery=require('mvc.dom'),util=require('mvc.util'),arrAdd=util.arrAdd,trim=require('mvc.parser').trim,
     getAttr=domQuery.getAttr,compile=require('mvc.compile').compile,define=bracket.define,Controller=require('mvc.controller');
-  var appConfigMap={ };
+  var appConfigMap={},waiting={};
   function initApp(appName,callback){
-    var appElement=domQuery.$('*[bracket-app="!"]'.replace('!',appName))[0],requires;
-    if(appElement){
-      configApp(appName,{require:getAttr(appElement,'bracket-require',1)});
-      requires=appConfigMap[appName].require;
-      domQuery.$('*[bracket-controller]',appElement).forEach(function(child){
-        addRequire(requires,getAttr(child,'bracket-controller'))
-      });
-      define(requires.slice(),function(){
-        var ret=compile(appElement,new Controller());
-        if(util.isFunc(callback))callback(ret);
-      })
+    if(!util.isFunc(callback))callback=noop;
+    if(waiting){
+      var cbs=waiting[appName]||(waiting[appName]=[]);
+      arrAdd(cbs,callback)
+    }else{
+      var appElement=domQuery.$('*[br-app="!"]'.replace('!',appName))[0],requires;
+      if(appElement){
+        configApp(appName,{require:getAttr(appElement,'bracket-require',1)});
+        requires=appConfigMap[appName].require;
+        domQuery.$('*[br-controller]',appElement).forEach(function(child){
+          addRequire(requires,getAttr(child,'br-controller'))
+        });
+        define(requires.slice(),function(){
+          var ret=compile(appElement,new Controller());
+          if(util.isFunc(callback))callback(ret);
+        })
+      }
+      else
+        console.warn('element with br-app='+appName+' not found');
     }
-    else
-      console.warn('element with bracket-app='+appName+' not found');
   }
+
   function configApp(appName,config){
     var appConfig=getAppConfig(appName);
     if(appConfig&&config){
@@ -47,6 +54,16 @@ bracket.define('bracket.mvc',['mvc.compile','mvc.dom'],function(require){
     }
 
   }
+  function noop(){}
+  document.addEventListener('DOMContentLoaded',function(){
+    var pending=waiting;
+    waiting=null;
+    util.forEach(pending,function(cbs,name){
+      initApp(name,function(result){
+        cbs.forEach(function(call){call(result)})
+      })
+    })
+  });
   return bracket.mvc={
     init:initApp,
     configApp:configApp
