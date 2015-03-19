@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html >
+<head lang="en" >
+    <meta charset="UTF-8">
+    <title>项目简介</title>
+    <base target="_blank">
+    <link rel="stylesheet" href="../common/layout.css">
+    <script src="../../dist/bracket.js"></script>
+</head>
+<body br-app="ch1" br-controller="ch1-ctrl">
+<main>
+    <h1>{{::title}}</h1>
+    <p>
+        最初被Angular吸引是因为它强大的<a href="https://docs.Angularjs.org/api/ng/directive/ngRepeat">ng-repeat</a>以及
+        <a href="https://docs.Angularjs.org/api/ng/directive/ngModel">ng-model</a>,在后面的学习中越发觉得Angular是一个极其
+        优秀的框架,用得根本停不下来.直到出现了极高的性能要求......
+    </p>
+    <p>
+        Angular是一个大系统,基本上提供了前端所有的工具,当开发一个大项目的时候,这些工具会很有用,可是有些时候只是想用Angular其中某些功能,
+        也许只是简单的ng-repeat,ng-show,ng-click.这时会遇到两难问题,要么退回去写dom和数据的绑定,要么加载庞大的AngularJS.
+    </p>
+    <p>
+        Angular改变了我的编程模式,把我从频繁的DOM操作中拯救出来,更专注于业务逻辑.
+        于是我试着模仿一个Angular,这个"山寨"Angular会有如下特点:
+    </p>
+    <ul>
+        <li br-repeat="feature in features">{{::feature}}</li>
+    </ul>
+    <p>
+        在每章的文件夹下会有示例代码,如果你不熟悉Angular,有些概念需要参考Angular的指南(可能要翻墙),如有错误也希望得到指正
+    </p>
+</main>
+<script>
+    bracket.define('ch1-ctrl',function(){
+        return function(controller){
+            controller.title='浅谈Angular';
+            controller.features='小,保留最主要的功能,尽量的减小文件;实现绑定,模拟Angular的MVVM模式;js模块化,使得代码易维护;基于HTML5的API,对于DOM操作使用原生代码,不引入JQuery或者JQLite'.split(';');
+        }
+    });
+    bracket.define('start',['bracket.mvc'],function(require){
+        require('bracket.mvc').init('ch1');
+    })
+</script>
+</body>
+</html>
