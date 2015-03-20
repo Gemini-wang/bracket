@@ -29,15 +29,26 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
     this.right=right;
     this.action=action;
   }
+  function AlternativeAst(condition,assert,reject){
+    this.condition=condition;
+    this.assert=assert;
+    this.reject=reject;
+  }
   Ast.prototype={
     get:function(context){},
     reduce:function(){return this;},
-    operate:function(action,right){
+    operate:function(action,right,third){
+      if(action=='')
       return new BinaryAst(this,action,right);
     },
     type:'ast'
   };
-
+  inherit(AlternativeAst,{
+    type:'alter',
+    get:function(context){
+      return this.condition.get(context)? this.assert.get(context):this.reject.get(context)
+    }
+  });
   inherit(ThisAst,{
       type:'this',
       get:function(context){
@@ -79,21 +90,19 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
   inherit(BinaryAst,{
     type:'binary',
     get:function(context){
-      var left=this.left.get(context),right,act;
-      if(left!==undefined){
-        if((act=this.action)==='call'){
-          return this.right.get(context,left)
-        }
-        else if(right=this.right.get(context)){
-          switch (act){
-            case '.':return left[right];
-            case '+':return left+right;
-            case '-':return left-right;
-            case '*':return left*right;
-            case '/':return left/right;
-            default: throw Error('unsupported action');
-          }
-        }
+      var left=this.left.get(context),right=this.right,act=this.action;
+      if(act==='||'&&left)return left;
+      else if(act=='!')return !left;
+      right=right.get(context);
+      switch (act=this.action){
+        case '||':return right;
+        case  '&&':return left&&right;
+        case '!=':return left!=right;
+        case  '!==':return left!==right;
+        case '===':return left===right;
+        case '==':return left==right;
+        case '.':return left[right];
+        default :throw Error('not support:'+act);
       }
     },
     reduce:function(){return reduceBinaryAst(this)}
@@ -137,5 +146,6 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
   exports.Const=ConstAst;
   exports.Invoke=InvokeAst;
   exports.Access=AccessAst;
+  exports.Alter=AlternativeAst;
   exports.Statement=StatementAst;
 });
