@@ -4,7 +4,7 @@
 (\'|\").*?\1                  return "CONST"
 (null|undefined|false|true) return "CONST"
 (\d+|\d*\.\d+)              return "CONST"
-("=="|"!="|"!=="|"==="|"&&"|"||"|"!") return "OPT"
+(\[|]|\(|\)|,|!={0,2}|={2,3}|&{1,2}|\?|:|\|{1,2}|\.|<=?|>=?) return "OPT"
 [a-z_$][a-z0-9_$]*          return "ID"
 ","                         return ","
 "("                         return '('
