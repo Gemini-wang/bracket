@@ -257,8 +257,10 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
     this.value=value;
   }
   function InvokeAst(nameAst,paramAsts){
-    this.params=paramAsts.slice();
-    this.name=nameAst;
+    this.params=paramAsts?paramAsts.slice():[];
+    var bin=asBinary(nameAst);
+    this.caller=bin.caller;
+    this.callee=bin.callee;
   }
   function AccessAst(proName){
     this.propertyNames=proName?(proName instanceof Array?proName.slice():[proName]):[];
@@ -280,11 +282,11 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
     get:function(context){},
     reduce:function(){return this;},
     operate:function(action,right,third){
-      if(action=='')
       return new BinaryAst(this,action,right);
     },
     type:'ast'
   };
+
   inherit(AlternativeAst,{
     type:'alter',
     get:function(context){
@@ -299,6 +301,7 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
   );
   inherit(ConstAst,{
     get:function(){return this.value},
+    toString:function(){return this.value+''},
     type:'const'
   });
   inherit(AccessAst,{
@@ -312,20 +315,32 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
       this.propertyNames.push(name);
       return this
     },
+    operate:function(action,right){
+      return  action=='.'&& right instanceof ConstAst?
+       this.addProperty(right.value):  new BinaryAst(this,action,right);
+    },
     type:'access'
   });
+  function asBinary(ast){
+    var caller,callee,pros,right;
+    if(ast instanceof BinaryAst && ast.action=='.'){
+      caller=ast.left;
+      callee=(right=ast.right) instanceof ConstAst? new AccessAst(right.value):right;
+    }else if(ast instanceof AccessAst&& (pros=ast.propertyNames).length>1){
+      caller=new AccessAst(pros.slice(0,pros.length-1));
+      callee=new AccessAst(pros[pros.length-1])
+    }else{
+      caller=new ThisAst();
+      callee=ast;
+
+    }
+    return {caller:caller,callee:callee}
+  }
   inherit(InvokeAst,{
-    get:function(context,caller){
-      var callee,ret;
-      caller=caller||context;
-      if(isFunc(callee=caller[this.name])){
-        try{
-          ret=callee.apply(caller,this.params.map(function(exp){return exp.get(context)}));
-        }catch (ex){
-          ret=ex;
-        }
-      }
-      return ret;
+    get:function(context){
+      var caller=this.caller.get(context),callee;
+      if(caller&&isFunc(callee=this.callee.get(caller)))
+        return callee.apply(caller,this.params.map(function(exp){return exp.get(context)}));
     },
     type:'invoke'
   });
@@ -344,6 +359,10 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
         case '===':return left===right;
         case '==':return left==right;
         case '.':return left[right];
+        case '>':return left> right;
+        case '<': return left <right;
+        case '<=': return left<=right;
+        case '>=':return left>=right;
         default :throw Error('not support:'+act);
       }
     },
@@ -985,19 +1004,18 @@ bracket.define('mvc.parser',['mvc.ast'],function(require,exports){
 bracket.define('mvc.parser2',['mvc.ast'],function(require,exports){
   /*
   * transform form jison https://github.com/zaach/jison
-  * LR(1) Parser
+  * LL(0) Parser
   *
   */
-  var ast=require('mvc.ast'),uid=require('mvc.util').uid,util=require('mvc.util'),
+  var ast=require('mvc.ast'),util=require('mvc.util'),cache={},
     TOKEN={CONST:'CONST',PUNC:"OPT",SEP:";",ID:"ID",EOF:'EOF'};
-  var puncExp=/^(\[|\]|\(|\)|,|\!\={1,2}|\={2,3}|\&\&|\?|\:|\|\||\.)/,
+  var puncExp=/^(\[|]|\(|\)|,|!={0,2}|={2,3}|&{1,2}|\?|:|\|{1,2}|\.|<=?|>=?)/,
     sep=';',
     whitespaceExp=/^[\s\t\r\n\f]+/,
-    constRegExp=/^(ture|false|null|undefined)/,
-    numberExp=/^(\d+|\d*\.\d+)/,
+    constRegExp=/^(true|false|null|undefined)/,
+    numberExp=/^(\-?(\d*\.\d+|\d+))/,
     idRegExp=/^[a-z_$][a-z0-9_$]*/i,
     strExp=/^('|").*?\1/;
-
   function convertConst(str){
     switch (str){
       case 'false':return false;
@@ -1012,7 +1030,6 @@ bracket.define('mvc.parser2',['mvc.ast'],function(require,exports){
     this.type=type;
     this.index=index;
     this.symbol=symbol;
-    this.done=false;
   }
   Token.prototype={
    toString:function(){return this.value+''}
@@ -1022,28 +1039,29 @@ bracket.define('mvc.parser2',['mvc.ast'],function(require,exports){
   }
   Tokenizer.prototype={
     error:function(){
-      throw Error('parse error in:'+this.input.slice(0,this.input.length-this.currentInput.length))
+      throw Error('parse error in:'+this.input.slice(0,this.input.length-this.currentInput.length+1))
     },
     getIndex:function(){
       return this.input.length-this.currentInput.length;
     },
     lex:function(){
       var match,matched,input,self=this;
-      while(!this.end()){
-        input=this.skip();
+      while(!this.end()&&(input=this.skip())){
         if(isConst())return getToken(TOKEN.CONST,convertConst(matched));
-        else if(isIdentifier()) return getToken(TOKEN.ID);
-        else if(isString()) return getToken(TOKEN.CONST);
-        else if(isNumber()) return getToken(TOKEN.CONST,+match);
-        else if(isPunctuation())return getToken(TOKEN.PUNC,matched);
+        else if(isIdentifier()) return getToken(TOKEN.ID,matched);
+        else if(isString())return getToken(TOKEN.CONST,matched.substr(1,matched.length-2));
+        else if(isNumber()) return getToken(TOKEN.CONST,+matched);
+        else if(isPunctuation()) return getToken(TOKEN.PUNC,matched);
         else if(isSeparator())return getToken(TOKEN.SEP,';');
         else this.error();
       }
       this.done?  matched='$end':this.done=!!(matched='EOF');
-      return getToken(TOKEN.EOF,matched);
-      function getToken(type,value,symbol){
+      return new Token(matched,TOKEN.EOF,self.getIndex(),matched);
+      function getToken(type,value){
         self.currentInput=input.substr(matched.length);
-        return new Token(value||matched,type,self.getIndex(),type===TOKEN.PUNC? value:type)
+        // symbol: == != !== === >= <= > <  -> 'OPT'
+        // symbol: ,! () [] ? : . -> its literal
+        return new Token(value,type,self.getIndex(),type===TOKEN.PUNC? (symbols.indexOf(value)==-1?TOKEN.PUNC:value):type)
       }
       function matchReg(reg){
         return (match=input.match(reg))&&(matched=match[0]);
@@ -1074,8 +1092,8 @@ bracket.define('mvc.parser2',['mvc.ast'],function(require,exports){
       return this.currentInput=this.currentInput.replace(whitespaceExp,'');
     }
   };
-  function parse(input,Tokenizer){
-    var tokenizer=new Tokenizer(input), state,vstack=[],stack=[0],token,len,action,symbol,ret;
+  function parse(input,TokenizerFunc){
+    var tokenizer=new TokenizerFunc(input), state,vstack=[],stack=[0],token,len,action,symbol,ret;
     while(1){
       state=stack[stack.length-1];
       if(!(action=defaultActions[state])){
@@ -1109,31 +1127,61 @@ bracket.define('mvc.parser2',['mvc.ast'],function(require,exports){
       throw Error('parse error in:'+ input.substr(token.index-5,5));
     }
     function performAction(state,$$){
-      var $0=$$.length-1;
-      switch (state){
+      var $0 = $$.length - 1;
+      switch (state) {
         case 2:
-          return $$[$0];
+          return new ast.Const($$[$0]);
         case 3:
-          return $$[$0-2]+$$[$0];
-        case 4:
-          return $$[$0-2]-$$[$0];
+          return new ast.Access($$[$0]);
         case 5:
-         return $$[$0-1];
+          return $$[$0-2].operate('.',new ast.Const($$[$0]));
+        case 6:
+          return $$[$0-3].operate('.',$$[$0-1]);
+        case 7:
+          return $$[$0].operate('!');
+        case 8:
+          return $$[$0-2].operate($$[$0-1],$$[$0]);
+        case 9:
+          return new ast.Alter($$[$0-4],$$[$0-2],$$[$0]);
+        case 10:
+          return $$[$0-1];
+        case 11:
+          return [$$[$0]];
+        case 12:
+          $$[$0-2].push($$[$0]);
+          break;
+        case 13:
+          return new ast.Invoke($$[$0-2]);
+        case 14:
+          return new ast.Invoke($$[$0-3],$$[$0-1]);
       }
     }
   }
-  exports.parse=function(input,tokenizer){
-     return parse(input,util.isFunc(tokenizer)? tokenizer:Tokenizer);
-  };
-  exports.token=function(){
 
+  exports.parse=function(input){
+    var statement=cache[input=input.trim()];
+    if(!statement){
+      statement=new ast.Statement();
+      input.split(/;/g).forEach(function(expInput){
+        if(expInput=expInput.trim())
+          statement.add(parse(expInput,Tokenizer))
+      });
+      cache[input]=statement=statement.reduce();
+    }
+    return statement
   };
-  var symbols=["$accept", "$end", "error", "exp", "value", "EOF", "number", "+", "-", "(", ")"],
-    table,productions=[0,[3,2],[4,1],[4,3],[4,3],[4,3]],
-    defaultActions={5:[2,1]};
+
+  exports.token=function(input){
+    var results=[],tokenizer=new Tokenizer(input);
+    while(!tokenizer.done)results.push(tokenizer.lex());
+    return results;
+  };
+  var symbols=["$accept", "$end", "error", "exp", "value", "EOF", "CONST", "ID", "func", ".", "[", "]", "!", "OPT", "?", ":", "(", ")", "params", ","],
+    table,productions=[0,[3,2],[4,1],[4,1],[4,1],[4,3],[4,4],[4,2],[4,3],[4,5],[4,3],[18,1],[18,3],[8,3],[8,4]],
+    defaultActions={8:[2,1]};
   (function(){
-    var o=function(k,v,o,l){for(o=o||{},l=k.length;l--;o[k[l]]=v);return o},$V0=[1,3],$V1=[1,4],$V2=[1,6],$V3=[1,7],$V4=[5,7,8,10];
-    table=[{3:1,4:2,6:$V0,9:$V1},{1:[3]},{5:[1,5],7:$V2,8:$V3},o($V4,[2,2]),{4:8,6:$V0,9:$V1},{1:[2,1]},{4:9,6:$V0,9:$V1},{4:10,6:$V0,9:$V1},{7:$V2,8:$V3,10:[1,11]},o($V4,[2,3]),o($V4,[2,4]),o($V4,[2,5])];
+    var o=function(k,v,o,l){for(o=o||{},l=k.length;l--;o[k[l]]=v);return o},$V0=[1,3],$V1=[1,4],$V2=[1,6],$V3=[1,7],$V4=[1,9],$V5=[1,10],$V6=[1,11],$V7=[1,12],$V8=[1,13],$V9=[5,9,10,11,13,14,15,16,17,19],$Va=[5,11,13,14,15,17,19],$Vb=[17,19];
+    table=[{3:1,4:2,6:$V0,7:$V1,8:5,12:$V2,16:$V3},{1:[3]},{5:[1,8],9:$V4,10:$V5,13:$V6,14:$V7,16:$V8},o($V9,[2,2]),o($V9,[2,3]),o($V9,[2,4]),{4:14,6:$V0,7:$V1,8:5,12:$V2,16:$V3},{4:15,6:$V0,7:$V1,8:5,12:$V2,16:$V3},{1:[2,1]},{7:[1,16]},{4:17,6:$V0,7:$V1,8:5,12:$V2,16:$V3},{4:18,6:$V0,7:$V1,8:5,12:$V2,16:$V3},{4:19,6:$V0,7:$V1,8:5,12:$V2,16:$V3},{4:22,6:$V0,7:$V1,8:5,12:$V2,16:$V3,17:[1,20],18:21},o($Va,[2,7],{9:$V4,10:$V5,16:$V8}),{9:$V4,10:$V5,13:$V6,14:$V7,16:$V8,17:[1,23]},o($V9,[2,5]),{9:$V4,10:$V5,11:[1,24],13:$V6,14:$V7,16:$V8},o($Va,[2,8],{9:$V4,10:$V5,16:$V8}),{9:$V4,10:$V5,13:$V6,14:$V7,15:[1,25],16:$V8},o($V9,[2,13]),{17:[1,26],19:[1,27]},o($Vb,[2,11],{9:$V4,10:$V5,13:$V6,14:$V7,16:$V8}),o($V9,[2,10]),o($V9,[2,6]),{4:28,6:$V0,7:$V1,8:5,12:$V2,16:$V3},o($V9,[2,14]),{4:29,6:$V0,7:$V1,8:5,12:$V2,16:$V3},o([5,11,14,15,17,19],[2,9],{9:$V4,10:$V5,13:$V6,16:$V8}),o($Vb,[2,12],{9:$V4,10:$V5,13:$V6,14:$V7,16:$V8})]
   })()
 });
 /**

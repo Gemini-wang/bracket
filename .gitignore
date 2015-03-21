@@ -13,6 +13,7 @@ $RECYCLE.BIN/
 gruntfile.js
 temp
 node_modules
+bower_components
 # Windows Installer files
 *.cab
 *.msi

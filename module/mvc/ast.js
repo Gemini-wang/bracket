@@ -15,8 +15,10 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
     this.value=value;
   }
   function InvokeAst(nameAst,paramAsts){
-    this.params=paramAsts.slice();
-    this.name=nameAst;
+    this.params=paramAsts?paramAsts.slice():[];
+    var bin=asBinary(nameAst);
+    this.caller=bin.caller;
+    this.callee=bin.callee;
   }
   function AccessAst(proName){
     this.propertyNames=proName?(proName instanceof Array?proName.slice():[proName]):[];
@@ -38,11 +40,11 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
     get:function(context){},
     reduce:function(){return this;},
     operate:function(action,right,third){
-      if(action=='')
       return new BinaryAst(this,action,right);
     },
     type:'ast'
   };
+
   inherit(AlternativeAst,{
     type:'alter',
     get:function(context){
@@ -57,6 +59,7 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
   );
   inherit(ConstAst,{
     get:function(){return this.value},
+    toString:function(){return this.value+''},
     type:'const'
   });
   inherit(AccessAst,{
@@ -70,20 +73,32 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
       this.propertyNames.push(name);
       return this
     },
+    operate:function(action,right){
+      return  action=='.'&& right instanceof ConstAst?
+       this.addProperty(right.value):  new BinaryAst(this,action,right);
+    },
     type:'access'
   });
+  function asBinary(ast){
+    var caller,callee,pros,right;
+    if(ast instanceof BinaryAst && ast.action=='.'){
+      caller=ast.left;
+      callee=(right=ast.right) instanceof ConstAst? new AccessAst(right.value):right;
+    }else if(ast instanceof AccessAst&& (pros=ast.propertyNames).length>1){
+      caller=new AccessAst(pros.slice(0,pros.length-1));
+      callee=new AccessAst(pros[pros.length-1])
+    }else{
+      caller=new ThisAst();
+      callee=ast;
+
+    }
+    return {caller:caller,callee:callee}
+  }
   inherit(InvokeAst,{
-    get:function(context,caller){
-      var callee,ret;
-      caller=caller||context;
-      if(isFunc(callee=caller[this.name])){
-        try{
-          ret=callee.apply(caller,this.params.map(function(exp){return exp.get(context)}));
-        }catch (ex){
-          ret=ex;
-        }
-      }
-      return ret;
+    get:function(context){
+      var caller=this.caller.get(context),callee;
+      if(caller&&isFunc(callee=this.callee.get(caller)))
+        return callee.apply(caller,this.params.map(function(exp){return exp.get(context)}));
     },
     type:'invoke'
   });
@@ -102,6 +117,10 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
         case '===':return left===right;
         case '==':return left==right;
         case '.':return left[right];
+        case '>':return left> right;
+        case '<': return left <right;
+        case '<=': return left<=right;
+        case '>=':return left>=right;
         default :throw Error('not support:'+act);
       }
     },

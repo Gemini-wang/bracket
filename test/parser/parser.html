@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title></title>
+
+    <script src="../../bower_components/jasmine/lib/jasmine-core/jasmine.js"></script>
+    <script src="../../bower_components/jasmine/lib/jasmine-core/jasmine-html.js"></script>
+    <script src="../../bower_components/jasmine/lib/jasmine-core/boot.js"></script>
+    <link rel="stylesheet" href="../../bower_components/jasmine/lib/jasmine-core/jasmine.css">
+    <script src="../../dist/bracket.js"></script>
+</head>
+<body>
+<script>
+    bracket.define('parser2-test',['mvc.parser2'],function(require){
+        var parser=require('mvc.parser2'),src;
+        function tokenToEqual(source,arr){
+            var values=parser.token(src=source).map(function(t){return t.value});
+            values.pop();
+            expect(values).toEqual(arr);
+            return values;
+        }
+        describe('lex test:',function(){
+            it('parse operator',function(){
+                tokenToEqual(src='! ? || ,  == !== === != && : ( ) [ ] & | >= <= > <',src.split(/\s+/));
+                tokenToEqual(src='a == b ? 2:"abc"',['a','==','b','?' ,2,':','abc'])
+            });
+            it('parse string ,number,id,const',function(){
+                tokenToEqual('1 5.4  .6 -.333 -5 -5.6',[1,5.4,0.6, -.333,-5,-5.6]);
+                tokenToEqual('true false null undefined',[true,false,null,undefined]);
+                tokenToEqual('"long long" "5.5" "a(3)"','long long,5.5,a(3)'.split(','));
+                tokenToEqual('$a b94 _a9$5','$a b94 _a9$5'.split(' '))
+            });
+            it('parse getter',function(){
+                tokenToEqual('a.b.c','a.b.c'.split(''));
+                tokenToEqual('a [ b ].c','a[b].c'.split(''))
+            });
+            it('parse invoke',function(){
+                tokenToEqual('func (  )','func ( )'.split(' '));
+                tokenToEqual('[5](a,5,"c",foo())',['[',5,']','(','a',',',5,',','c',',','foo','(',')',')'])
+            });
+
+        });
+        describe('parse test:',function(){
+            var ast,src;
+            function parseToGet(exp,context,result){
+                expect((ast=parser.parse(src=exp)).get(context)).toBe(result);
+            }
+            it('parse getter',function(){
+                parseToGet('a',{a:1},1);
+                parseToGet('a.c',{a:{c:2}},2);
+                parseToGet('items[0]',{items:[3]},3);
+                parseToGet('a [b] ',{ a:[4],b:0 },4);
+            });
+            it('parse function',function(){
+                var ctx;
+                parseToGet('item.get()',{item:{get:function(){return 7}}},7);
+                parseToGet('call()',{call:function(){return 5}},5);
+                parseToGet('items[b].name()',{ items:[{name:function(){return 6}}],b:0 },6);
+                parseToGet('items[0].count()',{ items:[{count:function(){return 8}}]},8);
+                parseToGet('add(2,7)',ctx={add:function(a,b){return a+b}},9);
+                parseToGet('add("good","luck")',ctx,'goodluck');
+                parseToGet('add(a,b)',{add:ctx.add,a:'--',b:'!!'},'--!!')
+            });
+            it('parse operation',function(){
+                parseToGet('!a',{a:'c'},false);
+                parseToGet('!!"123"',{},true);
+                parseToGet("1==a",{a:"1"},true);
+                parseToGet('1===num()',{num:function(){return 1}},true);
+                parseToGet('a > b ? 10:3',{a:1,b:0},10);
+                parseToGet('0||5',{},5);
+                parseToGet('0&&4',{},0);
+                parseToGet('3>2?(0||3):2',{},3);
+            });
+            it('parse complex syntax',function(){
+
+            })
+        })
+    });
+</script>
+</body>
+</html>

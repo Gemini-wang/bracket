@@ -1,0 +1,48 @@
+%lex
+%%
+[\s\r\n\t\f]+               /*ignore*/
+(\'|\").*?\1                  return "CONST"
+(null|undefined|false|true) return "CONST"
+(\d+|\d*\.\d+)              return "CONST"
+("=="|"!="|"!=="|"==="|"&&"|"||"|"!") return "OPT"
+[a-z_$][a-z0-9_$]*          return "ID"
+","                         return ","
+"("                         return '('
+')'                         return ')'
+'.'                         return '.'
+';'                         return ';'
+':'                         return ':'
+'?'                         return '?'
+<<EOF>>                     return "EOF"
+/lex
+
+%left PRARM
+%left ','
+%left '?'
+%left OPT
+%right '!'
+%left '.' '['
+%right '('
+%right EMBED
+%start exp
+%%
+exp:value EOF;
+value:
+	CONST                       {$$=new ast.Const($1); }
+	|ID                         {$$=new ast.Access($1);}
+	|func
+	|value '.' ID               {$$=$1.operate('.',new ast.Const($3));}
+	|value '[' value ']'        {$$=$1.operate('.',$3);}
+	| '!' value                 {$$=$2.operate('!')}
+	| value OPT value           {$$=$1.operate($2,$3)}
+	|value '?' value ':' value  {$$=new ast.Alter($1,$3,$5)}
+	|'(' value ')'  %prec EMBED {$$=$2;}
+	;
+params:
+    value  %prec PRARM           {$$=[$1]}
+	|params ',' value            {$1.push($3)}
+	;
+func:
+    value '(' ')'                {$$=new ast.Invoke($1)}
+	|value '(' params ')'        {$$=new ast.Invoke($1,$3)}
+	;
