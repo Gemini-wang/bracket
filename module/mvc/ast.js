@@ -15,8 +15,10 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
     this.value=value;
   }
   function InvokeAst(nameAst,paramAsts){
-    this.params=paramAsts.slice();
-    this.name=nameAst;
+    this.params=paramAsts?paramAsts.slice():[];
+    var bin=asBinary(nameAst);
+    this.caller=bin.caller;
+    this.callee=bin.callee;
   }
   function AccessAst(proName){
     this.propertyNames=proName?(proName instanceof Array?proName.slice():[proName]):[];
@@ -29,72 +31,105 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
     this.right=right;
     this.action=action;
   }
+  function AlternativeAst(condition,assert,reject){
+    this.condition=condition;
+    this.assert=assert;
+    this.reject=reject;
+  }
   Ast.prototype={
-    get:function(context){},
+    get:function(){},
     reduce:function(){return this;},
-    operate:function(action,right){
+    operate:function(action,right,third){
       return new BinaryAst(this,action,right);
     },
+    set:function(){},
     type:'ast'
   };
 
+  inherit(AlternativeAst,{
+    type:'alter',
+    get:function(context){
+      return this.condition.get(context)? this.assert.get(context):this.reject.get(context)
+    }
+  });
   inherit(ThisAst,{
       type:'this',
       get:function(context){
       return this.thisObj||context
-    }}
-  );
+    }});
   inherit(ConstAst,{
     get:function(){return this.value},
+    toString:function(){return this.value+''},
     type:'const'
   });
   inherit(AccessAst,{
     get:function(context){
-      var ret=context;
-      for(var i= 0,names=this.propertyNames,name=names[0];name!==undefined&&ret!==undefined;name=names[++i])
-        if((ret=ret[name])===undefined)break;
-      return ret;
+      return getContextProperty(context,this.propertyNames);
     },
     addProperty:function(name){
       this.propertyNames.push(name);
       return this
     },
+    operate:function(action,right){
+      return  action=='.'&& right instanceof ConstAst?
+       this.addProperty(right.value):  new BinaryAst(this,action,right);
+    },
+    set:function(context,value){
+      var pros=this.propertyNames, target,len;
+      if((len=pros.length)&&(target=getContextProperty(context,pros.slice(0,len-1))))
+       return target[pros[len-1]]=value;
+    },
     type:'access'
   });
+  function asBinary(ast){
+    var caller,callee,pros,right;
+    if(ast instanceof BinaryAst && ast.action=='.'){
+      caller=ast.left;
+      callee=(right=ast.right) instanceof ConstAst? new AccessAst(right.value):right;
+    }else if(ast instanceof AccessAst&& (pros=ast.propertyNames).length>1){
+      caller=new AccessAst(pros.slice(0,pros.length-1));
+      callee=new AccessAst(pros[pros.length-1])
+    }else{
+      caller=new ThisAst();
+      callee=ast;
+
+    }
+    return {caller:caller,callee:callee}
+  }
   inherit(InvokeAst,{
-    get:function(context,caller){
-      var callee,ret;
-      caller=caller||context;
-      if(isFunc(callee=caller[this.name])){
-        try{
-          ret=callee.apply(caller,this.params.map(function(exp){return exp.get(context)}));
-        }catch (ex){
-          ret=ex;
-        }
-      }
-      return ret;
+    get:function(context){
+      var caller=this.caller.get(context),callee;
+      if(caller&&isFunc(callee=this.callee.get(caller)))
+        return callee.apply(caller,this.params.map(function(exp){return exp.get(context)}));
     },
     type:'invoke'
   });
   inherit(BinaryAst,{
     type:'binary',
     get:function(context){
-      var left=this.left.get(context),right,act;
-      if(left!==undefined){
-        if((act=this.action)==='call'){
-          return this.right.get(context,left)
-        }
-        else if(right=this.right.get(context)){
-          switch (act){
-            case '.':return left[right];
-            case '+':return left+right;
-            case '-':return left-right;
-            case '*':return left*right;
-            case '/':return left/right;
-            default: throw Error('unsupported action');
-          }
-        }
+      var left=this.left.get(context),right=this.right,act=this.action;
+      if(act==='||'&&left)return left;
+      else if(act=='!')return !left;
+      right=right.get(context);
+      switch (act=this.action){
+        case '||':return right;
+        case  '&&':return left&&right;
+        case '!=':return left!=right;
+        case  '!==':return left!==right;
+        case '===':return left===right;
+        case '==':return left==right;
+        case '.':return left[right];
+        case '>':return left> right;
+        case '<': return left <right;
+        case '<=': return left<=right;
+        case '>=':return left>=right;
+        default :throw Error('not support:'+act);
       }
+    },
+    set:function(context,value){
+      var left;
+      if(this.action==='.'&&(left=this.left.get(context)))
+       return left[this.right.get(context)]=value;
     },
     reduce:function(){return reduceBinaryAst(this)}
   });
@@ -113,6 +148,12 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
       return reduceStatement(this)
     }
   });
+  function getContextProperty(context,proNames){
+    var ret=context;
+    for(var i= 0,names=proNames,name=names[0];name!==undefined&&ret!==undefined;name=names[++i])
+      if((ret=ret[name])===undefined)break;
+    return ret;
+  }
   function reduceStatement(statement){
     var asts=statement.asts=statement.asts.map(function(a){return a.reduce()}).filter(function(a){return a}),len=asts.length;
     if(len) return len==1?asts[0]:statement;
@@ -137,5 +178,6 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
   exports.Const=ConstAst;
   exports.Invoke=InvokeAst;
   exports.Access=AccessAst;
+  exports.Alter=AlternativeAst;
   exports.Statement=StatementAst;
 });

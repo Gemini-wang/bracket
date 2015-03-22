@@ -14,7 +14,7 @@ bracket.define(['mvc.register'],function(require){
       name:'br-'+name,
       link:function(ctrl,element,attr){
         try{
-          var exp=getExp(attr['br'+capital(name)].value);
+          var exp=getExp(attr['br'+capital(name)]);
           function invoke(e){
             ctrl.$event=e;
             exp.get(ctrl);
@@ -23,6 +23,9 @@ bracket.define(['mvc.register'],function(require){
           }
           element.addEventListener(name,invoke);
           //should remove event listener?
+          element.addEventListener('unload',function(){
+            element.removeEventListener(name,invoke)
+          });
         }
         catch (ex){
           console.error(ex);

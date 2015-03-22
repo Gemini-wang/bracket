@@ -10,7 +10,7 @@ bracket.define('mvc.dom',['mvc.util'],function(require){
   }
   function normalizeEleAttr(element){
     return util.arrReduce(element.attributes,function(map,node){
-      map[normalizeAttrName(node.name)]=node;
+      map[normalizeAttrName(node.name)]=node.value;
       return map
     },{})
   }

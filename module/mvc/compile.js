@@ -22,9 +22,9 @@ bracket.define('mvc.compile',['mvc.register'],function(require,exports){
       }
     }
   }
-  function initController(node,parentController){
-    var ctrlFunc,ret,ctrlName;
-    if(node&&(ctrlName=node.value)){
+  function initController(ctrlName,parentController){
+    var ctrlFunc,ret;
+    if(ctrlName){
       ctrlFunc=require(ctrlName);
       if(!isFunc(ctrlFunc))throw Error('controller must be a function');
       ctrlFunc.call(ret=parentController.$$new(),ret);
