@@ -2,7 +2,7 @@
  * Created by Administrator on 2015/3/14.
  */
 bracket.define('mvc.controller',['mvc.binding'],function(require){
-   var util=require('mvc.util'),Binding=require('mvc.binding'),isFunc=util.isFunc,forEach=util.forEach,observe;
+   var util=require('mvc.util'),Binding=require('mvc.binding'),parser=require('mvc.parser'),isFunc=util.isFunc,forEach=util.forEach,observe;
    function Controller(opt){
      if(!(this instanceof Controller))return new Controller(opt);
      opt=opt||{};
@@ -19,6 +19,13 @@ bracket.define('mvc.controller',['mvc.binding'],function(require){
     $on:function(name,handler){
       return util.objOn(this,name,handler)
     },
+    $$get:function(exp){
+      return ensureExp(exp).get(this)
+    },
+    $$set:function(exp,value){
+      this.$update();
+      return ensureExp(exp).set(this,value);
+    },
     $upward:function(name,args){
       var p=this.$$parent;
       if(p){
@@ -28,9 +35,9 @@ bracket.define('mvc.controller',['mvc.binding'],function(require){
       return this;
     },
     $broadcast:function(name,args){
-      this.$$children.forEach(function(child){
-        util.objEmit(child,name,args);
-        child.$broadcast(name,args);
+      this.$$children.forEach(function(childCtrl){
+        util.objEmit(childCtrl,name,args);
+        childCtrl.$broadcast(name,args);
       });
       return this;
     },
@@ -52,10 +59,10 @@ bracket.define('mvc.controller',['mvc.binding'],function(require){
       return child;
     },
     $bind:function(binding,watchFunc,once){
-      var b;
+      var b,expId;
       if(typeof binding=='string')
         binding=new Binding(binding);
-      b=(b=this.$$bingdings[binding.id])? b.merge(binding): (this.$$bingdings[binding.id]=binding);
+      b=(b=this.$$bingdings[expId=binding.expression.id])? b.merge(binding): (this.$$bingdings[expId]=binding);
       b.addAction(watchFunc,once);
       return this;
     },
@@ -71,6 +78,11 @@ bracket.define('mvc.controller',['mvc.binding'],function(require){
       }
     }
   };
+  function ensureExp(exp){
+    if(exp instanceof Binding)return exp.expression;
+    if(typeof exp==="string")return parser.parse(exp);
+    return exp;
+  }
   function refreshController(ctrl){
     ctrl.$$phrase='updating';
     forEach(ctrl.$$bingdings,function(binding){ binding.update(ctrl); });

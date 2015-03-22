@@ -1,7 +1,7 @@
 /**
  * Created by Administrator on 2015/3/14.
  */
-bracket.define('mvc',['mvc.compile','mvc.dom'],function(require){
+bracket.define('bracket.mvc',['mvc.compile','mvc.dom'],function(require){
   var domQuery=require('mvc.dom'),util=require('mvc.util'),arrAdd=util.arrAdd,getAttr=domQuery.getAttr,
     compile=require('mvc.compile').compile,define=bracket.define,Controller=require('mvc.controller');
   var appConfigMap={},waiting={};

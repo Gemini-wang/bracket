@@ -1,11 +1,10 @@
 /**
  * Created by Administrator on 2015/3/20.
  */
-bracket.define('mvc.parser2',['mvc.ast'],function(require,exports){
+bracket.define('mvc.parser',['mvc.ast'],function(require,exports){
   /*
   * transform form jison https://github.com/zaach/jison
   * LL(0) Parser
-  *
   */
   var ast=require('mvc.ast'),util=require('mvc.util'),cache={},
     TOKEN={CONST:'CONST',PUNC:"OPT",SEP:";",ID:"ID",EOF:'EOF'};
@@ -59,8 +58,10 @@ bracket.define('mvc.parser2',['mvc.ast'],function(require,exports){
       return new Token(matched,TOKEN.EOF,self.getIndex(),matched);
       function getToken(type,value){
         self.currentInput=input.substr(matched.length);
-        // symbol: == != !== === >= <= > <  -> 'OPT'
-        // symbol: ,! () [] ? : . -> its literal
+        // symbol: == != !== === >= <= > <  && ||
+        // "OPT" for all
+        // symbol: ,! () [] ? : ,
+        // the same with their literal
         return new Token(value,type,self.getIndex(),type===TOKEN.PUNC? (symbols.indexOf(value)==-1?TOKEN.PUNC:value):type)
       }
       function matchReg(reg){
@@ -167,6 +168,7 @@ bracket.define('mvc.parser2',['mvc.ast'],function(require,exports){
           statement.add(parse(expInput,Tokenizer))
       });
       cache[input]=statement=statement.reduce();
+      statement.id=input;
     }
     return statement
   };

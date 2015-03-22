@@ -2,15 +2,17 @@
  * Created by Administrator on 2015/3/16.
  */
 /*
-it don't support binary an unary operation like :+ - * / == != > <
-and not support arrow construct :[1,2,3]
+this was a top down parser for the expression
+replaced by parser2.js
+it doesn't support binary an unary operation like :+ - * / == != > <
+
 you can get property or invoke a function:
  foo.a
  bar(3)
  add(items[0],items[1])
  "abc".substring(1)
 */
-bracket.define('mvc.parser',['mvc.ast'],function(require,exports){
+bracket.define('!mvc.parser',['mvc.ast'],function(require,exports){
   var ast=require('mvc.ast'),uid=require('mvc.util').uid;
   var punctuation='.[]();\'",',
     whitespaceExp=/^[\s\t\r\n\f]+/,

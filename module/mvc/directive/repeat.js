@@ -23,7 +23,7 @@ bracket.define(['mvc.compile'],function(require){
     name:'br-repeat',
     priority:1000,
     link:function(parentCtrl,ele,attr){
-      var exp=attr['brRepeat'].value,match= exp.match(/^\s*([\s\S]+?)\s+in\s+([\s\S]+?)(?:\s+track\s+by\s+([\s\S]+?))?\s*$/);
+      var exp=attr['brRepeat'],match= exp.match(/^\s*([\s\S]+?)\s+in\s+([\s\S]+?)(?:\s+track\s+by\s+([\s\S]+?))?\s*$/);
       if(!match) throw Error('repeat exp should like: item in items (track by item.id)');
       var endNode=createComment(ele,exp),template=ele.cloneNode(true);
       dom.removeAttribute(template,'br-repeat');

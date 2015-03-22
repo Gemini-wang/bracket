@@ -3,8 +3,6 @@
  */
 bracket.define(['mvc.register'],function(require){
   var bind=require('mvc.binding');
-  //it cause trouble when expression is a.b.c
-  //no validation before change ctrl
   function convert(val,type){
     switch (type){
       case 'number':return (+val)||'';
@@ -15,7 +13,7 @@ bracket.define(['mvc.register'],function(require){
   require('mvc.register').addCompiler({
     name:'br-model',
     link:function(ctrl,element,attr){
-      var exp=attr['brModel'].value,binding=bind(exp),initValue,type;
+      var exp=attr['brModel'],binding=bind(exp),initValue,type;
       if((initValue=binding.get(ctrl))!==undefined)
         type=typeof (element.value=initValue);
       ctrl.$bind(binding,function(val){
@@ -23,9 +21,9 @@ bracket.define(['mvc.register'],function(require){
           ctrl[exp]=element.value=val;
       });
       element.addEventListener('blur',function(){
-        if(ctrl[exp]!==element.value){
-          ctrl[exp]=convert(element.value,type);
-          ctrl.$update();
+        var refreshedValue=convert(element.value,type);
+        if(ctrl.$$get(binding)!==refreshedValue){
+          ctrl.$$set(binding,refreshedValue);
         }
       })
     }

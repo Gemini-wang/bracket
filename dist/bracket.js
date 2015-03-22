@@ -114,7 +114,7 @@
  * Created by Administrator on 2015/3/14.
  */
 bracket.define('mvc.binding',['mvc.parser'],function(require){
-  var util=require('mvc.util'),parser=require('mvc.parser'),arrAdd=util.arrAdd,isFunc=util.isFunc;
+  var util=require('mvc.util'),parser=require('mvc.parser'),arrAdd=util.arrAdd;
   function Binding(expression){
     if(!(this instanceof Binding))return new Binding(expression);
     if(typeof expression==="string")
@@ -123,9 +123,6 @@ bracket.define('mvc.binding',['mvc.parser'],function(require){
     this.$$actions=[];
   }
   Binding.prototype={
-    get id(){
-      return this.expression.id
-    },
     update:function(controller){
       var cur=this.$$currentValue=this.get(controller),last=this.$$lastValue;
       if(!util.equals(cur,last))
@@ -140,7 +137,8 @@ bracket.define('mvc.binding',['mvc.parser'],function(require){
       return this;
     },
     merge:function(binding){
-      if(binding.id!==this.id)throw Error('cannot merge binding of different ids');
+      if(binding.expression.id!==this.expression.id)
+        throw Error('cannot merge binding of different ids');
       var actions=this.$$actions;
       binding.$$actions.forEach(function(action){arrAdd(actions,action)});
       return this;
@@ -153,7 +151,7 @@ bracket.define('mvc.binding',['mvc.parser'],function(require){
  * Created by Administrator on 2015/3/14.
  */
 bracket.define('mvc.controller',['mvc.binding'],function(require){
-   var util=require('mvc.util'),Binding=require('mvc.binding'),isFunc=util.isFunc,forEach=util.forEach,observe;
+   var util=require('mvc.util'),Binding=require('mvc.binding'),parser=require('mvc.parser'),isFunc=util.isFunc,forEach=util.forEach,observe;
    function Controller(opt){
      if(!(this instanceof Controller))return new Controller(opt);
      opt=opt||{};
@@ -170,6 +168,13 @@ bracket.define('mvc.controller',['mvc.binding'],function(require){
     $on:function(name,handler){
       return util.objOn(this,name,handler)
     },
+    $$get:function(exp){
+      return ensureExp(exp).get(this)
+    },
+    $$set:function(exp,value){
+      this.$update();
+      return ensureExp(exp).set(this,value);
+    },
     $upward:function(name,args){
       var p=this.$$parent;
       if(p){
@@ -179,9 +184,9 @@ bracket.define('mvc.controller',['mvc.binding'],function(require){
       return this;
     },
     $broadcast:function(name,args){
-      this.$$children.forEach(function(child){
-        util.objEmit(child,name,args);
-        child.$broadcast(name,args);
+      this.$$children.forEach(function(childCtrl){
+        util.objEmit(childCtrl,name,args);
+        childCtrl.$broadcast(name,args);
       });
       return this;
     },
@@ -203,10 +208,10 @@ bracket.define('mvc.controller',['mvc.binding'],function(require){
       return child;
     },
     $bind:function(binding,watchFunc,once){
-      var b;
+      var b,expId;
       if(typeof binding=='string')
         binding=new Binding(binding);
-      b=(b=this.$$bingdings[binding.id])? b.merge(binding): (this.$$bingdings[binding.id]=binding);
+      b=(b=this.$$bingdings[expId=binding.expression.id])? b.merge(binding): (this.$$bingdings[expId]=binding);
       b.addAction(watchFunc,once);
       return this;
     },
@@ -222,6 +227,11 @@ bracket.define('mvc.controller',['mvc.binding'],function(require){
       }
     }
   };
+  function ensureExp(exp){
+    if(exp instanceof Binding)return exp.expression;
+    if(typeof exp==="string")return parser.parse(exp);
+    return exp;
+  }
   function refreshController(ctrl){
     ctrl.$$phrase='updating';
     forEach(ctrl.$$bingdings,function(binding){ binding.update(ctrl); });
@@ -279,11 +289,12 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
     this.reject=reject;
   }
   Ast.prototype={
-    get:function(context){},
+    get:function(){},
     reduce:function(){return this;},
     operate:function(action,right,third){
       return new BinaryAst(this,action,right);
     },
+    set:function(){},
     type:'ast'
   };
 
@@ -297,8 +308,7 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
       type:'this',
       get:function(context){
       return this.thisObj||context
-    }}
-  );
+    }});
   inherit(ConstAst,{
     get:function(){return this.value},
     toString:function(){return this.value+''},
@@ -306,10 +316,7 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
   });
   inherit(AccessAst,{
     get:function(context){
-      var ret=context;
-      for(var i= 0,names=this.propertyNames,name=names[0];name!==undefined&&ret!==undefined;name=names[++i])
-        if((ret=ret[name])===undefined)break;
-      return ret;
+      return getContextProperty(context,this.propertyNames);
     },
     addProperty:function(name){
       this.propertyNames.push(name);
@@ -318,6 +325,11 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
     operate:function(action,right){
       return  action=='.'&& right instanceof ConstAst?
        this.addProperty(right.value):  new BinaryAst(this,action,right);
+    },
+    set:function(context,value){
+      var pros=this.propertyNames, target,len;
+      if((len=pros.length)&&(target=getContextProperty(context,pros.slice(0,len-1))))
+       return target[pros[len-1]]=value;
     },
     type:'access'
   });
@@ -366,6 +378,11 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
         default :throw Error('not support:'+act);
       }
     },
+    set:function(context,value){
+      var left;
+      if(this.action==='.'&&(left=this.left.get(context)))
+       return left[this.right.get(context)]=value;
+    },
     reduce:function(){return reduceBinaryAst(this)}
   });
   inherit(StatementAst,{
@@ -383,6 +400,12 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
       return reduceStatement(this)
     }
   });
+  function getContextProperty(context,proNames){
+    var ret=context;
+    for(var i= 0,names=proNames,name=names[0];name!==undefined&&ret!==undefined;name=names[++i])
+      if((ret=ret[name])===undefined)break;
+    return ret;
+  }
   function reduceStatement(statement){
     var asts=statement.asts=statement.asts.map(function(a){return a.reduce()}).filter(function(a){return a}),len=asts.length;
     if(len) return len==1?asts[0]:statement;
@@ -434,9 +457,9 @@ bracket.define('mvc.compile',['mvc.register'],function(require,exports){
       }
     }
   }
-  function initController(node,parentController){
-    var ctrlFunc,ret,ctrlName;
-    if(node&&(ctrlName=node.value)){
+  function initController(ctrlName,parentController){
+    var ctrlFunc,ret;
+    if(ctrlName){
       ctrlFunc=require(ctrlName);
       if(!isFunc(ctrlFunc))throw Error('controller must be a function');
       ctrlFunc.call(ret=parentController.$$new(),ret);
@@ -469,7 +492,7 @@ bracket.define(['mvc.register'],function(require){
   require('mvc.register').addCompiler({
     name:'br-class',
     link:function(ctrl,element,attr){
-      ctrl.$bind(attr['brClass'].value,function(newClass,oldClass){
+      ctrl.$bind(attr['brClass'],function(newClass,oldClass){
         if(oldClass)
           element.classList.remove(oldClass);
         if(newClass)
@@ -480,7 +503,7 @@ bracket.define(['mvc.register'],function(require){
   require('mvc.register').addCompiler({
     name:'br-src',
     link:function(ctrl,element,attr){
-      ctrl.$bind(attr['brSrc'].value,function(newClass){
+      ctrl.$bind(attr['brSrc'],function(newClass){
         if(newClass) element.setAttribute('src',newClass)
       })
     }
@@ -489,7 +512,7 @@ bracket.define(['mvc.register'],function(require){
   require('mvc.register').addCompiler({
     name:'br-show',
     link:function(ctrl,element,attr){
-      ctrl.$bind(attr['brShow'].value,function(show){
+      ctrl.$bind(attr['brShow'],function(show){
         var style=element.getAttribute('style')||'';
         if(show)
           style=style.replace(showExp,'');
@@ -517,7 +540,7 @@ bracket.define(['mvc.register'],function(require){
       name:'br-'+name,
       link:function(ctrl,element,attr){
         try{
-          var exp=getExp(attr['br'+capital(name)].value);
+          var exp=getExp(attr['br'+capital(name)]);
           function invoke(e){
             ctrl.$event=e;
             exp.get(ctrl);
@@ -526,6 +549,9 @@ bracket.define(['mvc.register'],function(require){
           }
           element.addEventListener(name,invoke);
           //should remove event listener?
+          element.addEventListener('unload',function(){
+            element.removeEventListener(name,invoke)
+          });
         }
         catch (ex){
           console.error(ex);
@@ -539,8 +565,6 @@ bracket.define(['mvc.register'],function(require){
  */
 bracket.define(['mvc.register'],function(require){
   var bind=require('mvc.binding');
-  //it cause trouble when expression is a.b.c
-  //no validation before change ctrl
   function convert(val,type){
     switch (type){
       case 'number':return (+val)||'';
@@ -551,7 +575,7 @@ bracket.define(['mvc.register'],function(require){
   require('mvc.register').addCompiler({
     name:'br-model',
     link:function(ctrl,element,attr){
-      var exp=attr['brModel'].value,binding=bind(exp),initValue,type;
+      var exp=attr['brModel'],binding=bind(exp),initValue,type;
       if((initValue=binding.get(ctrl))!==undefined)
         type=typeof (element.value=initValue);
       ctrl.$bind(binding,function(val){
@@ -559,9 +583,9 @@ bracket.define(['mvc.register'],function(require){
           ctrl[exp]=element.value=val;
       });
       element.addEventListener('blur',function(){
-        if(ctrl[exp]!==element.value){
-          ctrl[exp]=convert(element.value,type);
-          ctrl.$update();
+        var refreshedValue=convert(element.value,type);
+        if(ctrl.$$get(binding)!==refreshedValue){
+          ctrl.$$set(binding,refreshedValue);
         }
       })
     }
@@ -592,7 +616,7 @@ bracket.define(['mvc.compile'],function(require){
     name:'br-repeat',
     priority:1000,
     link:function(parentCtrl,ele,attr){
-      var exp=attr['brRepeat'].value,match= exp.match(/^\s*([\s\S]+?)\s+in\s+([\s\S]+?)(?:\s+track\s+by\s+([\s\S]+?))?\s*$/);
+      var exp=attr['brRepeat'],match= exp.match(/^\s*([\s\S]+?)\s+in\s+([\s\S]+?)(?:\s+track\s+by\s+([\s\S]+?))?\s*$/);
       if(!match) throw Error('repeat exp should like: item in items (track by item.id)');
       var endNode=createComment(ele,exp),template=ele.cloneNode(true);
       dom.removeAttribute(template,'br-repeat');
@@ -640,7 +664,7 @@ bracket.define('mvc.dom',['mvc.util'],function(require){
   }
   function normalizeEleAttr(element){
     return util.arrReduce(element.attributes,function(map,node){
-      map[normalizeAttrName(node.name)]=node;
+      map[normalizeAttrName(node.name)]=node.value;
       return map
     },{})
   }
@@ -720,7 +744,7 @@ bracket.define('mvc.interpolate',['mvc.controller','mvc.dom'],function(require,e
 /**
  * Created by Administrator on 2015/3/14.
  */
-bracket.define('mvc',['mvc.compile','mvc.dom'],function(require){
+bracket.define('bracket.mvc',['mvc.compile','mvc.dom'],function(require){
   var domQuery=require('mvc.dom'),util=require('mvc.util'),arrAdd=util.arrAdd,getAttr=domQuery.getAttr,
     compile=require('mvc.compile').compile,define=bracket.define,Controller=require('mvc.controller');
   var appConfigMap={},waiting={};
@@ -789,223 +813,12 @@ bracket.define('mvc',['mvc.compile','mvc.dom'],function(require){
   }
 });
 /**
- * Created by Administrator on 2015/3/16.
- */
-/*
-it don't support binary an unary operation like :+ - * / == != > <
-and not support arrow construct :[1,2,3]
-you can get property or invoke a function:
- foo.a
- bar(3)
- add(items[0],items[1])
- "abc".substring(1)
-*/
-bracket.define('mvc.parser',['mvc.ast'],function(require,exports){
-  var ast=require('mvc.ast'),uid=require('mvc.util').uid;
-  var punctuation='.[]();\'",',
-    whitespaceExp=/^[\s\t\r\n\f]+/,
-    constRegExp=/^(ture|false|null|undefined)/,
-    numberExp=/^(\d+|\d*\.\d+)/,
-    idRegExp=/^[a-z_$][a-z0-9_$]*/i,
-    strExp=/^('|").*?\1/;
-  var TokenType={
-    'const':1,
-    punc:2,
-    id:3,
-    end:4
-  },cache={};
-  exports.token=token;
-  exports.parse=function(input,ignoreCache){
-    var ret;
-    input=input.trim();
-    if(ignoreCache||!(ret=cache[input]))
-       ret=parse(input);
-    if(!ignoreCache)cache[input]=ret;
-    ret.id=uid('expression');
-    return ret;
-  };
-  function token(input){
-    var len=input.length,tokens=[],match,matched;
-    while(skipWhitespace()){
-      if(isString())
-        addToken(TokenType.const,matched.substring(1,matched.length-1),matched);
-      else if(isConst())
-        addToken(TokenType.const,convertConst(),matched);
-      else if(isNumber())
-        addToken(TokenType.const,+matched,matched);
-      else if(isIdentifier())
-        addToken(TokenType.id,matched);
-      else if(isPunctuation()){
-        addToken(matched==';'?TokenType.end:TokenType.punc,matched);
-      }
-      else throw Error('unsupported string:'+input+' in '+curInput);
-    }
-    return tokens;
-    function skipWhitespace(){
-      return input=input.replace(whitespaceExp,'');
-    }
-    function isConst(){
-      return  (match=input.match(constRegExp))&&(matched=match[0]);
-    }
-    function convertConst(){
-      switch (matched){
-        case 'false':return false;
-        case 'true':return true;
-        case 'null':return null;
-        case 'undefined':return undefined;
-        default:throw '';
-      }
-    }
-    function isIdentifier(){
-      return (match=input.match(idRegExp))&&(matched=match[0]);
-    }
-    function isNumber(){
-      return (match=input.match(numberExp))&&(matched=match[0]);
-    }
-    function isString(){
-      return (match=input.match(strExp))&&(matched=match[0]);
-    }
-    function isPunctuation(){
-      return punctuation.indexOf(input[0])>-1&&!/^\.\d/.test(input)&&(matched=input[0]);
-    }
-    function addToken(type,value,replace){
-      tokens.push({type:type,value:value,index:len-input.length });
-      input=input.replace(replace||value,'');
-    }
-  }
-  var curInput;
-  function parseError(index){
-    throw Error('parse error:'+curInput+' ; at:'+index);
-  }
-  function parse(input){
-    var tokens=token(curInput=input);
-    return reduce(tokens);
-  }
-
-  /*
-  *
-  * statement:
-  *    exp
-  *    |statement \; exp
-  *    |exp EOF
-  *    ;
-  * value:
-  *    const
-  *    |id
-  *    |[ value ]
-  *    |value . value
-  *    |value [ value ]
-  *    ;
-  * invoke:
-  *    value \( value*(,value)* \)
-  *    ;
-  *
-  * */
-  /**
-   *
-   * @param tokens
-   * @returns {mvc.Statement}
-   */
-
-  function reduce(tokens){
-    var curToken,statement=new ast.Statement(),pending=[],preToken,tokenValue,curExp=new ast.This();
-    while(next()){
-      act();
-    }
-    newLine();
-    return statement.reduce();
-    function act(){
-      switch (curToken.type){
-        case TokenType.punc:case TokenType.end:
-          if(tokenValue=='.')reducePropertyAccess();
-          else if(tokenValue==';')newLine();
-          else if(tokenValue=='(')reduceInvoke(close('(',')'));
-          else if(tokenValue=='[')reduceIndex(close('[',']',1));
-          else parseError(curToken.index);
-          break;
-        case TokenType.const:
-          reduceConst(1);
-          break;
-        case TokenType.id:
-        shift();break;
-        default :parseError(curToken.index);
-      }
-    }
-    function operate(act,right){
-      return curExp=curExp.operate(act,right).reduce();
-    }
-    function close(left,right,throwZero,array){
-      var results=[],dis=1,token;
-      array=array||tokens;
-      for(var i= 0,len=array.length;i<len&&dis!=0;i++){
-        if((token=array.shift()).value==left)dis++;
-        else if(token.value==right)dis--;
-        if(dis==0)return (throwZero&&results.length==0)? parseError(token.index):results;
-        results.push(token);
-      }
-      throw Error('expect '+right +"after: "+curInput.substring(token.index-10,token.index))
-    }
-    function reducePropertyAccess(){
-      var len=pending.length;
-      if(len>1)
-        parseError(curToken.index);
-      else if(len==1)
-      operate('.' ,new ast.Const(pending.pop().value));
-    }
-    function reduceConst(throwIfPending){
-      if(throwIfPending&&pending.length)parseError(curToken.index);
-      newLine();
-      curExp=new ast.Const(curToken.value);
-    }
-    function newLine(){
-      reducePropertyAccess();
-      if(!(curExp instanceof ast.This))
-        statement.add(curExp);
-      return curExp=new ast.This();
-    }
-    function shift(){
-      pending.push(preToken=curToken);
-    }
-    function next(){
-      if(curToken=tokens.shift())
-      {
-        tokenValue=curToken.value;
-        return true;
-      }
-      return false
-    }
-    function reduceIndex(tokens){
-      reducePropertyAccess();
-      operate('.',reduce(tokens));
-    }
-    function reduceInvoke(paramTokens){
-      var params=[],last;
-      for(var start= 0,end= 0,len=paramTokens.length, t,pts;end<len;end++){
-        if((t=paramTokens[end].value)==','){
-          params.push(reduce(paramTokens.slice(start,end)));
-          start=end+1;
-        }
-        else if(t=='('){
-          pts=close('(',')',0,paramTokens.slice(end+1));
-          params.push(reduce(paramTokens.slice(end-1,start=pts.length+end+2)));
-          end=start;
-        }
-      }
-      if((last=paramTokens.slice(start)).length)
-        params.push(reduce(last));
-      return operate('call',new ast.Invoke(pending.pop().value,params));
-    }
-  }
-
-});
-/**
  * Created by Administrator on 2015/3/20.
  */
-bracket.define('mvc.parser2',['mvc.ast'],function(require,exports){
+bracket.define('mvc.parser',['mvc.ast'],function(require,exports){
   /*
   * transform form jison https://github.com/zaach/jison
   * LL(0) Parser
-  *
   */
   var ast=require('mvc.ast'),util=require('mvc.util'),cache={},
     TOKEN={CONST:'CONST',PUNC:"OPT",SEP:";",ID:"ID",EOF:'EOF'};
@@ -1059,8 +872,10 @@ bracket.define('mvc.parser2',['mvc.ast'],function(require,exports){
       return new Token(matched,TOKEN.EOF,self.getIndex(),matched);
       function getToken(type,value){
         self.currentInput=input.substr(matched.length);
-        // symbol: == != !== === >= <= > <  -> 'OPT'
-        // symbol: ,! () [] ? : . -> its literal
+        // symbol: == != !== === >= <= > <  && ||
+        // "OPT" for all
+        // symbol: ,! () [] ? : ,
+        // the same with their literal
         return new Token(value,type,self.getIndex(),type===TOKEN.PUNC? (symbols.indexOf(value)==-1?TOKEN.PUNC:value):type)
       }
       function matchReg(reg){
@@ -1167,6 +982,7 @@ bracket.define('mvc.parser2',['mvc.ast'],function(require,exports){
           statement.add(parse(expInput,Tokenizer))
       });
       cache[input]=statement=statement.reduce();
+      statement.id=input;
     }
     return statement
   };

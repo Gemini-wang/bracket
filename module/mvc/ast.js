@@ -37,11 +37,12 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
     this.reject=reject;
   }
   Ast.prototype={
-    get:function(context){},
+    get:function(){},
     reduce:function(){return this;},
     operate:function(action,right,third){
       return new BinaryAst(this,action,right);
     },
+    set:function(){},
     type:'ast'
   };
 
@@ -55,8 +56,7 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
       type:'this',
       get:function(context){
       return this.thisObj||context
-    }}
-  );
+    }});
   inherit(ConstAst,{
     get:function(){return this.value},
     toString:function(){return this.value+''},
@@ -64,10 +64,7 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
   });
   inherit(AccessAst,{
     get:function(context){
-      var ret=context;
-      for(var i= 0,names=this.propertyNames,name=names[0];name!==undefined&&ret!==undefined;name=names[++i])
-        if((ret=ret[name])===undefined)break;
-      return ret;
+      return getContextProperty(context,this.propertyNames);
     },
     addProperty:function(name){
       this.propertyNames.push(name);
@@ -76,6 +73,11 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
     operate:function(action,right){
       return  action=='.'&& right instanceof ConstAst?
        this.addProperty(right.value):  new BinaryAst(this,action,right);
+    },
+    set:function(context,value){
+      var pros=this.propertyNames, target,len;
+      if((len=pros.length)&&(target=getContextProperty(context,pros.slice(0,len-1))))
+       return target[pros[len-1]]=value;
     },
     type:'access'
   });
@@ -124,6 +126,11 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
         default :throw Error('not support:'+act);
       }
     },
+    set:function(context,value){
+      var left;
+      if(this.action==='.'&&(left=this.left.get(context)))
+       return left[this.right.get(context)]=value;
+    },
     reduce:function(){return reduceBinaryAst(this)}
   });
   inherit(StatementAst,{
@@ -141,6 +148,12 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
       return reduceStatement(this)
     }
   });
+  function getContextProperty(context,proNames){
+    var ret=context;
+    for(var i= 0,names=proNames,name=names[0];name!==undefined&&ret!==undefined;name=names[++i])
+      if((ret=ret[name])===undefined)break;
+    return ret;
+  }
   function reduceStatement(statement){
     var asts=statement.asts=statement.asts.map(function(a){return a.reduce()}).filter(function(a){return a}),len=asts.length;
     if(len) return len==1?asts[0]:statement;

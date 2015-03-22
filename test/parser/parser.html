@@ -3,7 +3,6 @@
 <head lang="en">
     <meta charset="UTF-8">
     <title></title>
-
     <script src="../../bower_components/jasmine/lib/jasmine-core/jasmine.js"></script>
     <script src="../../bower_components/jasmine/lib/jasmine-core/jasmine-html.js"></script>
     <script src="../../bower_components/jasmine/lib/jasmine-core/boot.js"></script>
@@ -73,7 +72,22 @@
                 parseToGet('3>2?(0||3):2',{},3);
             });
             it('parse complex syntax',function(){
-
+                parseToGet('call(a(c()),b())',{
+                    call:function(a,b){
+                        return a+b;
+                    },a:function(c){
+                        return c;
+                    },b:function(){return 5},
+                    c:function(){return 6}
+                },11);
+                parseToGet('c()=="b"? result:0',{
+                    result:12,
+                    c:function(){return 'b'}
+                },12);
+                parseToGet('getItems()[index].id==items[1]',{
+                    index:0,items:[{id:3},3],getItems:function(){return this.items}
+                },true);
+                parseToGet('2>1?(num>3 ? "success":0):0',{num:4},"success");
             })
         })
     });
