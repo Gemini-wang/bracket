@@ -35,7 +35,7 @@ bracket.define(['mvc.compile'],function(require){
          //require('mvc.debug').stop();
           if((last=lastBlock[i])&&last.model===model)
           {
-            result=last;
+            curBlock[i]=result=last;
             lastEles[i]=undefined;
           }
           else{

@@ -21,18 +21,11 @@ bracket.define(['mvc.register'],function(require){
       })
     }
   });
-  var showExp=/display\:none/g;
   require('mvc.register').addCompiler({
     name:'br-show',
     link:function(ctrl,element,attr){
       ctrl.$bind(attr['brShow'],function(show){
-        var style=element.getAttribute('style')||'';
-        if(show)
-          style=style.replace(showExp,'');
-        else if(!showExp.test(style))
-          style+=';display:none';
-        else return;
-        element.setAttribute('style',style)
+         element.style.display=show? 'initial':'none';
       })
     }
   })
