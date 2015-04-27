@@ -438,23 +438,32 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
  */
 bracket.define('mvc.compile',['mvc.register'],function(require,exports){
   var domQuery=require('mvc.dom'),util=require('mvc.util'),interpolate=require('mvc.interpolate').interpolateElement,isFunc=util.isFunc;
-  var handlers=require('mvc.register').compilers;
+  var getCompilers=require('mvc.register').collectCompilers;
   function compileElement(element,controller){
     var attr=domQuery.attrMap(element),eleCtrl;
     if(eleCtrl=initController(attr['brController'],controller)||controller){
-      handlers.forEach(link);
+      getCompilers(element).forEach(link);
       interpolate(eleCtrl,element,attr);
     }
     util.mkArr(element.children).forEach(function(child){
-      compileElement(child,eleCtrl)
+      compileElement(child,eleCtrl,element)
     });
+    if(element.$$shouldRemove) element.parentElement.removeChild(element);
     return {controller:eleCtrl,element:element,attributes:attr};
     function link(compiler){
-      var name=compiler.name;
-      if(attr.hasOwnProperty(name)){
-        compiler.link(eleCtrl,element,attr);
-        delete compiler[name];
+      var val;
+      if(val=compiler.template){
+        if(compiler.replace){
+          throw new Error('not supported yet');
+         /* var e=document.createElement('div');
+          e.innerHTML=val;
+          domQuery.insertBefore(element,eles=e.children);
+          element.$$shouldRemove=1;
+          //element=e.children[0];*/
+        }
+        else element.innerHTML=val;
       }
+      compiler.link(eleCtrl,element,attr);
     }
   }
   function initController(ctrlName,parentController){
@@ -508,18 +517,11 @@ bracket.define(['mvc.register'],function(require){
       })
     }
   });
-  var showExp=/display\:none/g;
   require('mvc.register').addCompiler({
     name:'br-show',
     link:function(ctrl,element,attr){
       ctrl.$bind(attr['brShow'],function(show){
-        var style=element.getAttribute('style')||'';
-        if(show)
-          style=style.replace(showExp,'');
-        else if(!showExp.test(style))
-          style+=';display:none';
-        else return;
-        element.setAttribute('style',style)
+         element.style.display=show? 'initial':'none';
       })
     }
   })
@@ -596,16 +598,7 @@ bracket.define(['mvc.register'],function(require){
  */
 bracket.define(['mvc.compile'],function(require){
   var compiler=require('mvc.compile'),util=require('mvc.util'),dom=require('mvc.dom');
-  function insertAfter(end,eles,removeEles){
-    var parent=end.parentElement, i,pre=end,ele;
-    for(i= eles.length-1;i>=0;i--){
-      if(!parent.contains(ele=eles[i]))
-        parent.insertBefore(ele,pre);
-      pre=ele;
-    }
-    if(removeEles)
-      removeEles.forEach(function(ele){if(ele)parent.removeChild(ele)});
-  }
+
   function createComment(element,exp){
     var end,p=element.parentElement;
     p.insertBefore(document.createComment('bracket-repeat '+exp),element);
@@ -620,7 +613,7 @@ bracket.define(['mvc.compile'],function(require){
       if(!match) throw Error('repeat exp should like: item in items (track by item.id)');
       var endNode=createComment(ele,exp),template=ele.cloneNode(true);
       dom.removeAttribute(template,'br-repeat');
-      ele.parentElement.removeChild(ele);
+      ele.$$shouldRemove=1;
       var watchExp=match[2],itemExp=match[1],trackExp=match[3],lastBlock={},lastEles=[];
       parentCtrl.$bind(watchExp,function(newCollection,old){
         newCollection=util.mkArr(newCollection)||[];
@@ -628,7 +621,7 @@ bracket.define(['mvc.compile'],function(require){
          //require('mvc.debug').stop();
           if((last=lastBlock[i])&&last.model===model)
           {
-            result=last;
+            curBlock[i]=result=last;
             lastEles[i]=undefined;
           }
           else{
@@ -646,7 +639,7 @@ bracket.define(['mvc.compile'],function(require){
           return result.element;
         }),last;
         lastBlock=curBlock;
-        insertAfter(endNode,elements,lastEles);
+        dom.insertBefore(endNode,elements,lastEles);
         lastEles=elements;
       })
     }
@@ -661,6 +654,16 @@ bracket.define('mvc.dom',['mvc.util'],function(require){
     return name.toLowerCase().replace(/^data\-/,'').replace(/\-[a-z]/g,function(src){
       return src[1].toUpperCase()
     })
+  }
+  function insertBefore(end,eles,removeEles){
+    var parent=end.parentElement, i,pre=end,ele;
+    for(i= eles.length-1;i>=0;i--){
+      if(!parent.contains(ele=eles[i]))
+        parent.insertBefore(ele,pre);
+      pre=ele;
+    }
+    if(removeEles)
+      removeEles.forEach(function(ele){if(ele)parent.removeChild(ele)});
   }
   function normalizeEleAttr(element){
     return util.arrReduce(element.attributes,function(map,node){
@@ -694,6 +697,7 @@ bracket.define('mvc.dom',['mvc.util'],function(require){
     },
     attrMap:normalizeEleAttr,
     normalize:normalizeAttrName,
+   insertBefore:insertBefore,
     textNodes:function(element){
       return util.arrFilter(element.childNodes,function(node){
         return node.nodeType===TEXT_NODE;
@@ -1005,23 +1009,39 @@ bracket.define('mvc.parser',['mvc.ast'],function(require,exports){
  */
 bracket.define('mvc.register',['mvc.interpolate'],function(require,e,module){
   var util=require('mvc.util'),isFunc=util.isFunc,domQuery=require('mvc.dom');
-  var handlers=[];//require('mvc.store').compileHandlers;
+  var handlers=[];
   function register(opt){
-    var name=domQuery.normalize(opt.name);
     util.arrInsert(handlers,{
       priority:opt.priority||0,
-      name:name,
-      link:isFunc(opt.link)?opt.link:noop
-    },'priority');
+      name:normalizeHandlerName(opt.name),
+      link:isFunc(opt.link)?opt.link:noop,
+      template:opt.template,
+      replace:opt.replace,
+      restrict:(opt.restrict||'A').toUpperCase()
+    },'priority',1);
   }
+  var namePrefix=['data-',''];
 
   module.exports={
     addCompiler:register,
+    collectCompilers:function(element){
+      var ret=[];
+      handlers.forEach(function(definition){
+        var res=definition.restrict,name=definition.name,add;
+        if(res.indexOf('A')>-1)
+          add=namePrefix.some(function(prefix){return element.hasAttribute(prefix+name)});
+        else if(res.indexOf('E')>-1 && element.tagName.toLowerCase()==name)
+          add=1;
+        if(add) util.arrAdd(ret,definition);
+      });
+      return ret;
+    },
     compilers:handlers
   };
-  function noop(){
-
+  function normalizeHandlerName(name){
+    return name.replace(/[A-Z]/g,function(str){return '-'+str})
   }
+  function noop(){}
 });
 /**
  * Created by Administrator on 2015/3/14.

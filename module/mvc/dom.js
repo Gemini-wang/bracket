@@ -8,6 +8,16 @@ bracket.define('mvc.dom',['mvc.util'],function(require){
       return src[1].toUpperCase()
     })
   }
+  function insertBefore(end,eles,removeEles){
+    var parent=end.parentElement, i,pre=end,ele;
+    for(i= eles.length-1;i>=0;i--){
+      if(!parent.contains(ele=eles[i]))
+        parent.insertBefore(ele,pre);
+      pre=ele;
+    }
+    if(removeEles)
+      removeEles.forEach(function(ele){if(ele)parent.removeChild(ele)});
+  }
   function normalizeEleAttr(element){
     return util.arrReduce(element.attributes,function(map,node){
       map[normalizeAttrName(node.name)]=node.value;
@@ -40,6 +50,7 @@ bracket.define('mvc.dom',['mvc.util'],function(require){
     },
     attrMap:normalizeEleAttr,
     normalize:normalizeAttrName,
+   insertBefore:insertBefore,
     textNodes:function(element){
       return util.arrFilter(element.childNodes,function(node){
         return node.nodeType===TEXT_NODE;

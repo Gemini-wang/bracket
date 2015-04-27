@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>component</title>
+    <script src="../dist/bracket.js"></script>
+</head>
+<body br-app="component-test" br-controller="mainCtrl">
+<ul>
+    <li  br-repeat="person in people">{{person.name}}</li>
+</ul>
+<ul>
+ <li br-repeat="person in people" list-item br-controller="personCtrl"></li>
+</ul>
+<script>
+    bracket.define('list-item',['mvc.register'],function(require){
+        var register=require('mvc.register');
+        register.addCompiler({
+            name:'list-item',
+            template:'<p>name:{{person.name}}</p><p>age:{{person.age}}</p>',
+            restrict:'AE'
+        })
+    });
+    bracket.define('personCtrl',function(){
+       return function(ctrl,p){
+           debugger;
+       }
+    });
+    bracket.define('mainCtrl',function(require){
+       return function(ctrl){
+           ctrl.people=[{name:'a',age:2}]
+       }
+    });
+    bracket.mvc.init('component-test')
+</script>
+</body>
+</html>
