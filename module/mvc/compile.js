@@ -5,30 +5,34 @@ bracket.define('mvc.compile',['mvc.register'],function(require,exports){
   var domQuery=require('mvc.dom'),util=require('mvc.util'),interpolate=require('mvc.interpolate').interpolateElement,isFunc=util.isFunc;
   var getCompilers=require('mvc.register').collectCompilers;
   function compileElement(element,controller){
-    var attr=domQuery.attrMap(element),eleCtrl;
+    var attr=domQuery.attrMap(element),eleCtrl,linkFns=[],compilers=getCompilers(element);
     if(eleCtrl=initController(attr['brController'],controller)||controller){
-      getCompilers(element).forEach(link);
+      compilers.forEach(compile);
+      linkFns.sort(function(a,b){return b.priority-a.priority}).forEach(function(link){link(eleCtrl,element,attr) });
       interpolate(eleCtrl,element,attr);
     }
     util.mkArr(element.children).forEach(function(child){
       compileElement(child,eleCtrl,element)
     });
-    if(element.$$shouldRemove) element.parentElement.removeChild(element);
+    if(element.$$shouldRemove)
+      element.parentElement.removeChild(element);
     return {controller:eleCtrl,element:element,attributes:attr};
-    function link(compiler){
-      var val;
+    function compile(compiler){
+      var val,linkFunc;
       if(val=compiler.template){
         if(compiler.replace){
-          throw new Error('not supported yet');
-         /* var e=document.createElement('div');
+          var e=document.createElement('div'),replacedElement;
           e.innerHTML=val;
-          domQuery.insertBefore(element,eles=e.children);
-          element.$$shouldRemove=1;
-          //element=e.children[0];*/
+          if(e.children.length!==1) throw Error('should be replaced with one element');
+          replacedElement=e.children[0];
+          compilers.push.apply(compilers,getCompilers(replacedElement));//not sort
+          element.parentElement.replaceChild(replacedElement,element);
+          element=replacedElement;
         }
         else element.innerHTML=val;
       }
-      compiler.link(eleCtrl,element,attr);
+      if(util.isFunc(linkFunc=compiler.link))
+        linkFns.push(linkFunc);
     }
   }
   function initController(ctrlName,parentController){

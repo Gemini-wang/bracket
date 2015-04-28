@@ -7,18 +7,17 @@
 </head>
 <body br-app="component-test" br-controller="mainCtrl">
 <ul>
-    <li  br-repeat="person in people">{{person.name}}</li>
-</ul>
-<ul>
- <li br-repeat="person in people" list-item br-controller="personCtrl"></li>
+    <list-item br-repeat="person in people"></list-item>
+ <!--<li br-repeat="person in people" list-item br-controller="personCtrl"></li>-->
 </ul>
 <script>
     bracket.define('list-item',['mvc.register'],function(require){
         var register=require('mvc.register');
         register.addCompiler({
             name:'list-item',
-            template:'<p>name:{{person.name}}</p><p>age:{{person.age}}</p>',
-            restrict:'AE'
+            template:'<li><p>name:{{person.name}}</p><p>age:{{person.age}}</p></li>',
+            restrict:'AE',
+            replace:true
         })
     });
     bracket.define('personCtrl',function(){

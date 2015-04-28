@@ -440,30 +440,34 @@ bracket.define('mvc.compile',['mvc.register'],function(require,exports){
   var domQuery=require('mvc.dom'),util=require('mvc.util'),interpolate=require('mvc.interpolate').interpolateElement,isFunc=util.isFunc;
   var getCompilers=require('mvc.register').collectCompilers;
   function compileElement(element,controller){
-    var attr=domQuery.attrMap(element),eleCtrl;
+    var attr=domQuery.attrMap(element),eleCtrl,linkFns=[],compilers=getCompilers(element);
     if(eleCtrl=initController(attr['brController'],controller)||controller){
-      getCompilers(element).forEach(link);
+      compilers.forEach(compile);
+      linkFns.sort(function(a,b){return b.priority-a.priority}).forEach(function(link){link(eleCtrl,element,attr) });
       interpolate(eleCtrl,element,attr);
     }
     util.mkArr(element.children).forEach(function(child){
       compileElement(child,eleCtrl,element)
     });
-    if(element.$$shouldRemove) element.parentElement.removeChild(element);
+    if(element.$$shouldRemove)
+      element.parentElement.removeChild(element);
     return {controller:eleCtrl,element:element,attributes:attr};
-    function link(compiler){
-      var val;
+    function compile(compiler){
+      var val,linkFunc;
       if(val=compiler.template){
         if(compiler.replace){
-          throw new Error('not supported yet');
-         /* var e=document.createElement('div');
+          var e=document.createElement('div'),replacedElement;
           e.innerHTML=val;
-          domQuery.insertBefore(element,eles=e.children);
-          element.$$shouldRemove=1;
-          //element=e.children[0];*/
+          if(e.children.length!==1) throw Error('should be replaced with one element');
+          replacedElement=e.children[0];
+          compilers.push.apply(compilers,getCompilers(replacedElement));//not sort
+          element.parentElement.replaceChild(replacedElement,element);
+          element=replacedElement;
         }
         else element.innerHTML=val;
       }
-      compiler.link(eleCtrl,element,attr);
+      if(util.isFunc(linkFunc=compiler.link))
+        linkFns.push(linkFunc);
     }
   }
   function initController(ctrlName,parentController){
@@ -1008,17 +1012,21 @@ bracket.define('mvc.parser',['mvc.ast'],function(require,exports){
  * Created by 柏子 on 2015/3/15.
  */
 bracket.define('mvc.register',['mvc.interpolate'],function(require,e,module){
-  var util=require('mvc.util'),isFunc=util.isFunc,domQuery=require('mvc.dom');
+  var util=require('mvc.util'),isFunc=util.isFunc;
   var handlers=[];
   function register(opt){
-    util.arrInsert(handlers,{
+    var linkFunc=opt.link,handler;
+    util.arrInsert(handlers,handler={
       priority:opt.priority||0,
       name:normalizeHandlerName(opt.name),
-      link:isFunc(opt.link)?opt.link:noop,
       template:opt.template,
       replace:opt.replace,
       restrict:(opt.restrict||'A').toUpperCase()
     },'priority',1);
+    if(isFunc(linkFunc)){
+      handler.link=linkFunc;
+      linkFunc.priority=handler.priority;
+    }
   }
   var namePrefix=['data-',''];
 
@@ -1028,20 +1036,18 @@ bracket.define('mvc.register',['mvc.interpolate'],function(require,e,module){
       var ret=[];
       handlers.forEach(function(definition){
         var res=definition.restrict,name=definition.name,add;
-        if(res.indexOf('A')>-1)
-          add=namePrefix.some(function(prefix){return element.hasAttribute(prefix+name)});
-        else if(res.indexOf('E')>-1 && element.tagName.toLowerCase()==name)
+        if(res.indexOf('E')>-1 && element.tagName.toLowerCase()==name)
           add=1;
+        if(!add&&res.indexOf('A')>-1)
+          add=namePrefix.some(function(prefix){return element.hasAttribute(prefix+name)});
         if(add) util.arrAdd(ret,definition);
       });
       return ret;
-    },
-    compilers:handlers
+    }
   };
   function normalizeHandlerName(name){
     return name.replace(/[A-Z]/g,function(str){return '-'+str})
   }
-  function noop(){}
 });
 /**
  * Created by Administrator on 2015/3/14.
