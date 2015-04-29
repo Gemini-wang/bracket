@@ -12,8 +12,10 @@ bracket.define('mvc.interpolate',['mvc.controller','mvc.dom'],function(require,e
     return Binding(exp);
   };
   exports.interpolateElement=function(controller,element,attr){
-    forEach(attr,function(attrNode){
-      interpolateNode(attrNode,'value');
+    var hasUsedAttrs=Object.getOwnPropertyNames(attr).map(function(name){return attr[name]});
+    forEach(element.attributes,function(attrNode){
+      if(hasUsedAttrs.indexOf(attrNode)==-1)
+        interpolateNode(attrNode,'value');
     });
     textNodes(element).forEach(function(textNode){
      interpolateNode(textNode,'textContent');

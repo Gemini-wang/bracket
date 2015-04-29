@@ -17,7 +17,7 @@
     <p>
         random a number from <b>{{min}}</b> to <b>{{max}}</b>
     </p>
-    <p>max: <input br-model="max"></p>
+    <p>max: <input br-model="max" placeholder="{{markMax}}"></p>
     <p>min: <input br-model="min"></p>
     <button br-click="add()">Random</button>
     <button br-click="remove()">Remove</button>
@@ -32,6 +32,7 @@ bracket.define('ch2-list-ctrl',function(){
     return function(controller){
         controller.min=0;
         controller.max=10;
+        controller.markMax='max range';
         controller.add=function(){
             items.push(random(controller.min,controller.max));
         };

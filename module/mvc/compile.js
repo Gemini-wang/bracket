@@ -19,6 +19,12 @@ bracket.define('mvc.compile',['mvc.register'],function(require,exports){
     return {controller:eleCtrl,element:element,attributes:attr};
     function compile(compiler){
       var val,linkFunc;
+      if(val=compiler.templateSelector){
+        val=document.querySelector(val);
+        if(!val) throw Error('templateSelector:'+compiler.templateSelector+' not found matched element');
+        compiler.template=val.innerHTML;
+        compiler.templateSelector=null;
+      }
       if(val=compiler.template){
         if(compiler.replace){
           var e=document.createElement('div'),replacedElement;
@@ -31,14 +37,15 @@ bracket.define('mvc.compile',['mvc.register'],function(require,exports){
         }
         else element.innerHTML=val;
       }
-      if(util.isFunc(linkFunc=compiler.link))
+      eleCtrl=initController(compiler.controller,eleCtrl)||eleCtrl;
+      if(isFunc(linkFunc=compiler.link))
         linkFns.push(linkFunc);
     }
   }
-  function initController(ctrlName,parentController){
+  function initController(ctrlNameOrFunc,parentController){
     var ctrlFunc,ret;
-    if(ctrlName){
-      ctrlFunc=require(ctrlName);
+    if(ctrlNameOrFunc){
+      ctrlFunc=isFunc(ctrlNameOrFunc)? ctrlNameOrFunc:require(ctrlNameOrFunc);
       if(!isFunc(ctrlFunc))throw Error('controller must be a function');
       ctrlFunc.call(ret=parentController.$$new(),ret);
     }

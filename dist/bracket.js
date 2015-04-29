@@ -454,6 +454,12 @@ bracket.define('mvc.compile',['mvc.register'],function(require,exports){
     return {controller:eleCtrl,element:element,attributes:attr};
     function compile(compiler){
       var val,linkFunc;
+      if(val=compiler.templateSelector){
+        val=document.querySelector(val);
+        if(!val) throw Error('templateSelector:'+compiler.templateSelector+' not found matched element');
+        compiler.template=val.innerHTML;
+        compiler.templateSelector=null;
+      }
       if(val=compiler.template){
         if(compiler.replace){
           var e=document.createElement('div'),replacedElement;
@@ -466,14 +472,15 @@ bracket.define('mvc.compile',['mvc.register'],function(require,exports){
         }
         else element.innerHTML=val;
       }
-      if(util.isFunc(linkFunc=compiler.link))
+      eleCtrl=initController(compiler.controller,eleCtrl)||eleCtrl;
+      if(isFunc(linkFunc=compiler.link))
         linkFns.push(linkFunc);
     }
   }
-  function initController(ctrlName,parentController){
+  function initController(ctrlNameOrFunc,parentController){
     var ctrlFunc,ret;
-    if(ctrlName){
-      ctrlFunc=require(ctrlName);
+    if(ctrlNameOrFunc){
+      ctrlFunc=isFunc(ctrlNameOrFunc)? ctrlNameOrFunc:require(ctrlNameOrFunc);
       if(!isFunc(ctrlFunc))throw Error('controller must be a function');
       ctrlFunc.call(ret=parentController.$$new(),ret);
     }
@@ -502,7 +509,8 @@ bracket.define('mvc.debug',function(r,e,module){
  * Created by 柏子 on 2015/3/15.
  */
 bracket.define(['mvc.register'],function(require){
-  require('mvc.register').addCompiler({
+  var addCompiler=require('mvc.register').addCompiler;
+  addCompiler({
     name:'br-class',
     link:function(ctrl,element,attr){
       ctrl.$bind(attr['brClass'],function(newClass,oldClass){
@@ -513,7 +521,7 @@ bracket.define(['mvc.register'],function(require){
       })
     }
   });
-  require('mvc.register').addCompiler({
+  addCompiler({
     name:'br-src',
     link:function(ctrl,element,attr){
       ctrl.$bind(attr['brSrc'],function(newClass){
@@ -521,11 +529,19 @@ bracket.define(['mvc.register'],function(require){
       })
     }
   });
-  require('mvc.register').addCompiler({
+  addCompiler({
     name:'br-show',
     link:function(ctrl,element,attr){
       ctrl.$bind(attr['brShow'],function(show){
-         element.style.display=show? 'initial':'none';
+         element.style.display=show? '':'none';
+      })
+    }
+  });
+  addCompiler({
+    name:'br-disabled',
+    link:function(ctrl,element,attr){
+      ctrl.$bind(attr['brDisabled'],function(disabled){
+        disabled? element.setAttribute('disabled',1):element.removeAttribute('disabled');
       })
     }
   })
@@ -723,8 +739,10 @@ bracket.define('mvc.interpolate',['mvc.controller','mvc.dom'],function(require,e
     return Binding(exp);
   };
   exports.interpolateElement=function(controller,element,attr){
-    forEach(attr,function(attrNode){
-      interpolateNode(attrNode,'value');
+    var hasUsedAttrs=Object.getOwnPropertyNames(attr).map(function(name){return attr[name]});
+    forEach(element.attributes,function(attrNode){
+      if(hasUsedAttrs.indexOf(attrNode)==-1)
+        interpolateNode(attrNode,'value');
     });
     textNodes(element).forEach(function(textNode){
      interpolateNode(textNode,'textContent');
@@ -754,7 +772,8 @@ bracket.define('mvc.interpolate',['mvc.controller','mvc.dom'],function(require,e
  */
 bracket.define('bracket.mvc',['mvc.compile','mvc.dom'],function(require){
   var domQuery=require('mvc.dom'),util=require('mvc.util'),arrAdd=util.arrAdd,getAttr=domQuery.getAttr,
-    compile=require('mvc.compile').compile,define=bracket.define,Controller=require('mvc.controller');
+    compile=require('mvc.compile').compile,define=bracket.define,Controller=require('mvc.controller'),
+    getDirDependencies=require('mvc.register').getDependencies;
   var appConfigMap={},waiting={};
   function initApp(appName,callback){
     if(!util.isFunc(callback))callback=noop;
@@ -769,6 +788,7 @@ bracket.define('bracket.mvc',['mvc.compile','mvc.dom'],function(require){
         domQuery.$('*[br-controller]',appElement).forEach(function(child){
           addRequire(requires,getAttr(child,'br-controller'))
         });
+        getDirDependencies(appElement,requires);
         define(requires.slice(),function(){
           var ret=compile(appElement,new Controller());
           if(util.isFunc(callback))callback(ret);
@@ -1012,21 +1032,25 @@ bracket.define('mvc.parser',['mvc.ast'],function(require,exports){
  * Created by 柏子 on 2015/3/15.
  */
 bracket.define('mvc.register',['mvc.interpolate'],function(require,e,module){
-  var util=require('mvc.util'),isFunc=util.isFunc;
+  var util=require('mvc.util'),isFunc=util.isFunc,controllerDep={};
   var handlers=[];
   function register(opt){
-    var linkFunc=opt.link,handler;
+    var linkFunc=opt.link,handler,ctrlName;
     util.arrInsert(handlers,handler={
       priority:opt.priority||0,
       name:normalizeHandlerName(opt.name),
       template:opt.template,
+      templateSelector:opt.templateSelector,
       replace:opt.replace,
-      restrict:(opt.restrict||'A').toUpperCase()
+      controller:ctrlName=opt.controller,
+      restrict:(opt.restrict||'AE').toUpperCase()
     },'priority',1);
     if(isFunc(linkFunc)){
       handler.link=linkFunc;
       linkFunc.priority=handler.priority;
     }
+    if(typeof ctrlName=="string")
+      controllerDep[ctrlName]=depSelectors(handler.name,handler.restrict)
   }
   var namePrefix=['data-',''];
 
@@ -1043,8 +1067,22 @@ bracket.define('mvc.register',['mvc.interpolate'],function(require,e,module){
         if(add) util.arrAdd(ret,definition);
       });
       return ret;
+    },
+    getDependencies:function(element,ret){
+      ret=ret||[];
+      util.forEach(controllerDep,function(selectors,depName){
+        if(selectors.some(function(sle){return element.querySelector(sle)}))
+          util.arrAdd(ret,depName);
+      });
+      return ret;
     }
   };
+  function depSelectors(dirName,restrict){
+    var ret;
+    ret= restrict.indexOf('A')? namePrefix.map(function(pre){return '*['+ pre+dirName+']'}):[];
+    if(restrict.indexOf('E')>-1)ret.push(dirName);
+    return ret;
+  }
   function normalizeHandlerName(name){
     return name.replace(/[A-Z]/g,function(str){return '-'+str})
   }
