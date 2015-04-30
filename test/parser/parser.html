@@ -11,8 +11,8 @@
 </head>
 <body>
 <script>
-    bracket.define('parser2-test',['mvc.parser2'],function(require){
-        var parser=require('mvc.parser2'),src;
+    bracket.define('parser2-test',['mvc.parser'],function(require){
+        var parser=require('mvc.parser'),src;
         function tokenToEqual(source,arr){
             var values=parser.token(src=source).map(function(t){return t.value});
             values.pop();
@@ -88,6 +88,18 @@
                     index:0,items:[{id:3},3],getItems:function(){return this.items}
                 },true);
                 parseToGet('2>1?(num>3 ? "success":0):0',{num:4},"success");
+            });
+            it('invoke multiple functions',function(){
+                var ctx;
+                debugger;
+                parseToGet('a();b();c();',ctx={
+                    a:jasmine.createSpy('a'),
+                    b:jasmine.createSpy('b'),
+                    c:function(){return 1}
+                },1);
+                expect(ctx.a).toHaveBeenCalled();
+                expect(ctx.b).toHaveBeenCalled();
+
             })
         })
     });

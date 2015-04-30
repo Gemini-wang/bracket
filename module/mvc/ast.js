@@ -29,7 +29,7 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
   function BinaryAst(left,action,right){
     this.left=left||new ThisAst();
     this.right=right;
-    this.action=action;
+    this.act=BinaryOperation[this.action=action];
   }
   function AlternativeAst(condition,assert,reject){
     this.condition=condition;
@@ -104,6 +104,19 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
     },
     type:'invoke'
   });
+  var BinaryOperation={
+    '||':function(left,right){return right},
+    '&&':function(left,right){return left&&right},
+    '!=':function(left,right){return left!=right},
+    '!==':function(left,right){return left!==right},
+    '===':function(left,right){return left===right},
+    '==':function(l,r){return l==r},
+    '.':function(l,r){return l[r]},
+    '>':function(l,r){return l>r},
+    '>=':function(l,r){return l>=r},
+    '<':function(l,r){return l<r},
+    '<=':function(l,r){return l<=r}
+  };
   inherit(BinaryAst,{
     type:'binary',
     get:function(context){
@@ -111,20 +124,10 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
       if(act==='||'&&left)return left;
       else if(act=='!')return !left;
       right=right.get(context);
-      switch (act=this.action){
-        case '||':return right;
-        case  '&&':return left&&right;
-        case '!=':return left!=right;
-        case  '!==':return left!==right;
-        case '===':return left===right;
-        case '==':return left==right;
-        case '.':return left[right];
-        case '>':return left> right;
-        case '<': return left <right;
-        case '<=': return left<=right;
-        case '>=':return left>=right;
-        default :throw Error('not support:'+act);
-      }
+      return this.act(left,right);
+    },
+    act:function(){
+      throw Error('not support operation:'+this.action)
     },
     set:function(context,value){
       var left;
@@ -142,7 +145,7 @@ bracket.define('mvc.ast',['mvc.util'],function(require,exports){
     get:function(context){
       return this.asts.reduce(function(pre,ast){
         return ast.get(context);
-      })
+      },1)
     },
     reduce:function(){
       return reduceStatement(this)
