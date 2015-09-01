@@ -144,12 +144,17 @@ bracket.define('mvc.util',['mvc.debug'],function(require,exports,module){
     arrFirst:arrFirst,
     uid:uid,
     arrRemove:function(arr,item,all){
-      var i;
+      var i,ret;
       do{
         if((i=arr.indexOf(item))>-1)
+        {
           arr.splice(i,1);
+          ret=true;
+        }
         else break;
-      }while(all);
+      }
+      while(all);
+      return ret;
     },
     equals:function(a,b){
       if(a===b){

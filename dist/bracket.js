@@ -544,7 +544,15 @@ bracket.define(['mvc.register'],function(require){
     name:'br-disabled',
     link:function(ctrl,element,attr){
       ctrl.$bind(attr['brDisabled'],function(disabled){
-        disabled? element.setAttribute('disabled',1):element.removeAttribute('disabled');
+        disabled? element.setAttribute('disabled','1'):element.removeAttribute('disabled');
+      })
+    }
+  });
+  addCompiler({
+    name:'br-checked',
+    link:function(ctrl,element,attr){
+      ctrl.$bind(attr['brChecked'],function(checked){
+        checked? element.setAttribute('checked','1'):element.removeAttribute('checked');
       })
     }
   })
@@ -553,8 +561,8 @@ bracket.define(['mvc.register'],function(require){
  * Created by Administrator on 2015/3/15.
  */
 bracket.define(['mvc.register'],function(require){
-  var util=require('mvc.util'),isFunc=util.isFunc,addCompiler=require('mvc.register').addCompiler,getExp=require('mvc.parser').parse;
-  'click dblclick mousedown mouseup mouseover mouseout mousemove mouseenter mouseleave keydown keyup keypress submit focus blur copy cut paste'.split(' ').forEach(function(evt){
+  var util=require('mvc.util'),addCompiler=require('mvc.register').addCompiler,getExp=require('mvc.parser').parse;
+  'click dblclick mousedown mouseup mouseover mouseout mousemove mouseenter mouseleave keydown keyup keypress submit focus blur copy cut paste change'.split(' ').forEach(function(evt){
     defineEvent(evt,true);
   });
   function capital(word){
@@ -600,15 +608,15 @@ bracket.define(['mvc.register'],function(require){
   require('mvc.register').addCompiler({
     name:'br-model',
     link:function(ctrl,element,attr){
-      var exp=attr['brModel'],binding=bind(exp),initValue,type;
+      var exp=attr['brModel'],binding=bind(exp),initValue,type,inputType=element.type;
       if((initValue=binding.get(ctrl))!==undefined)
         type=typeof (element.value=initValue);
       ctrl.$bind(binding,function(val){
         if(val!==undefined)
           ctrl[exp]=element.value=val;
       });
-      element.addEventListener('blur',function(){
-        var refreshedValue=convert(element.value,type);
+      element.addEventListener(inputType =='checkbox'?'change':'blur',function(){
+        var refreshedValue= inputType=='checkbox'? element.checked:convert(element.value,type);
         if(ctrl.$$get(binding)!==refreshedValue){
           ctrl.$$set(binding,refreshedValue);
         }
@@ -1236,12 +1244,17 @@ bracket.define('mvc.util',['mvc.debug'],function(require,exports,module){
     arrFirst:arrFirst,
     uid:uid,
     arrRemove:function(arr,item,all){
-      var i;
+      var i,ret;
       do{
         if((i=arr.indexOf(item))>-1)
+        {
           arr.splice(i,1);
+          ret=true;
+        }
         else break;
-      }while(all);
+      }
+      while(all);
+      return ret;
     },
     equals:function(a,b){
       if(a===b){

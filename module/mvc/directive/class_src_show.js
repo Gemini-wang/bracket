@@ -34,7 +34,15 @@ bracket.define(['mvc.register'],function(require){
     name:'br-disabled',
     link:function(ctrl,element,attr){
       ctrl.$bind(attr['brDisabled'],function(disabled){
-        disabled? element.setAttribute('disabled',1):element.removeAttribute('disabled');
+        disabled? element.setAttribute('disabled','1'):element.removeAttribute('disabled');
+      })
+    }
+  });
+  addCompiler({
+    name:'br-checked',
+    link:function(ctrl,element,attr){
+      ctrl.$bind(attr['brChecked'],function(checked){
+        checked? element.setAttribute('checked','1'):element.removeAttribute('checked');
       })
     }
   })

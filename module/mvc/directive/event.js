@@ -2,8 +2,8 @@
  * Created by Administrator on 2015/3/15.
  */
 bracket.define(['mvc.register'],function(require){
-  var util=require('mvc.util'),isFunc=util.isFunc,addCompiler=require('mvc.register').addCompiler,getExp=require('mvc.parser').parse;
-  'click dblclick mousedown mouseup mouseover mouseout mousemove mouseenter mouseleave keydown keyup keypress submit focus blur copy cut paste'.split(' ').forEach(function(evt){
+  var util=require('mvc.util'),addCompiler=require('mvc.register').addCompiler,getExp=require('mvc.parser').parse;
+  'click dblclick mousedown mouseup mouseover mouseout mousemove mouseenter mouseleave keydown keyup keypress submit focus blur copy cut paste change'.split(' ').forEach(function(evt){
     defineEvent(evt,true);
   });
   function capital(word){
